@@ -104,6 +104,7 @@ def revertir_tipos_eventos(apps, schema_editor):
     ]
     
     TipoEvento.objects.filter(codigo__in=codigos).delete()
+    
 
 
 class Migration(migrations.Migration):
@@ -115,4 +116,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(cargar_tipos_eventos, revertir_tipos_eventos),
     ]
-    

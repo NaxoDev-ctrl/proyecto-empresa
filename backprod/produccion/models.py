@@ -560,12 +560,11 @@ class Maquina(models.Model):
     
     def __str__(self):
         return f"{self.codigo} - {self.nombre}"
-    
-
  
 # ============================================================================
 # MODELO: TipoEvento 
 # ============================================================================
+
 class TipoEvento(models.Model):
     """
     Catálogo de tipos de eventos para la hoja de procesos.

@@ -115,3 +115,4 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(cargar_tipos_eventos, revertir_tipos_eventos),
     ]
+    

@@ -563,8 +563,9 @@ class Maquina(models.Model):
     
 
 # ============================================================================
-# MODELO: TipoEvento
+# MODELO: TipoEvento 
 # ============================================================================
+
 class TipoEvento(models.Model):
     """
     Catálogo de tipos de eventos para la hoja de procesos.

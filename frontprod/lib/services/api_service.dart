@@ -509,4 +509,367 @@ class ApiService {
       throw Exception('Error de conexión: $e');
     }
   }
+  // ========================================================================
+  // MÁQUINAS
+  // ========================================================================
+
+  /// Obtener todas las máquinas activas
+  Future<List<dynamic>> getMaquinas() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/maquinas/'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(utf8.decode(response.bodyBytes));
+        final data = jsonResponse is List ? jsonResponse : jsonResponse['results'];
+        return data;
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener máquinas');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  // ========================================================================
+  // TIPOS DE EVENTOS
+  // ========================================================================
+
+  /// Obtener todos los tipos de eventos
+  Future<List<dynamic>> getTiposEventos() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/tipos-eventos/'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(utf8.decode(response.bodyBytes));
+        final data = jsonResponse is List ? jsonResponse : jsonResponse['results'];
+        return data;
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener tipos de eventos');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  // ========================================================================
+  // HOJA DE PROCESOS
+  // ========================================================================
+
+  /// Crear hoja de procesos
+  Future<Map<String, dynamic>> crearHojaProcesos({
+    required int tareaId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/hojas-procesos/'),
+        headers: _getHeaders(),
+        body: json.encode({
+          'tarea': tareaId,
+        }),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al crear hoja de procesos');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  /// Obtener hoja de procesos por tarea
+  Future<Map<String, dynamic>> getHojaProcesosPorTarea(int tareaId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/hojas-procesos/por_tarea/?tarea_id=$tareaId'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener hoja de procesos');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  /// Finalizar hoja de procesos
+  Future<Map<String, dynamic>> finalizarHojaProcesos(int id) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/hojas-procesos/$id/finalizar/'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al finalizar hoja de procesos');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  // ========================================================================
+  // EVENTOS DE PROCESO
+  // ========================================================================
+
+  /// Crear evento de proceso
+  Future<Map<String, dynamic>> crearEventoProceso({
+    required int hojaProcesosId,
+    required int tipoEventoId,
+    required String horaInicio,
+    String? horaFin,
+    String? observaciones,
+    List<int>? maquinasIds,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/eventos-proceso/'),
+        headers: _getHeaders(),
+        body: json.encode({
+          'hoja_procesos': hojaProcesosId,
+          'tipo_evento': tipoEventoId,
+          'hora_inicio': horaInicio,
+          'hora_fin': horaFin,
+          'observaciones': observaciones,
+          'maquinas_ids': maquinasIds ?? [],
+        }),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al crear evento');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  /// Finalizar evento de proceso
+  Future<Map<String, dynamic>> finalizarEventoProceso(int id) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/eventos-proceso/$id/finalizar_evento/'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al finalizar evento');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  /// Listar eventos de una hoja de procesos
+  Future<List<dynamic>> getEventosProceso(int hojaProcesosId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/eventos-proceso/?hoja_procesos=$hojaProcesosId'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(utf8.decode(response.bodyBytes));
+        final data = jsonResponse is List ? jsonResponse : jsonResponse['results'];
+        return data;
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener eventos');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  // ========================================================================
+  // TRAZABILIDAD
+  // ========================================================================
+
+  /// Crear trazabilidad
+  Future<Map<String, dynamic>> crearTrazabilidad({
+    required int hojaProcesosId,
+    required int cantidadProducida,
+    required List<Map<String, dynamic>> materiasPrimas,
+    List<Map<String, dynamic>>? reprocesos,
+    List<Map<String, dynamic>>? mermas,
+    String? observaciones,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/trazabilidades/'),
+        headers: _getHeaders(),
+        body: json.encode({
+          'hoja_procesos': hojaProcesosId,
+          'cantidad_producida': cantidadProducida,
+          'materias_primas': materiasPrimas,
+          'reprocesos_data': reprocesos ?? [],
+          'mermas_data': mermas ?? [],
+          'observaciones': observaciones,
+        }),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al crear trazabilidad');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  /// Obtener trazabilidades por fecha y turno
+  Future<List<dynamic>> getTrazabilidadesPorFechaTurno({
+    required String fecha,
+    required int turnoId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/trazabilidades/por_fecha_turno/?fecha=$fecha&turno=$turnoId'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(utf8.decode(response.bodyBytes));
+        final data = jsonResponse is List ? jsonResponse : jsonResponse['results'];
+        return data;
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener trazabilidades');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  /// Obtener detalle de trazabilidad
+  Future<Map<String, dynamic>> getTrazabilidadDetalle(int id) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/trazabilidades/$id/'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener trazabilidad');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  /// Subir foto de etiqueta
+  Future<Map<String, dynamic>> subirFotoEtiqueta(int trazabilidadId, List<int> imageBytes) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/subir_foto_etiqueta/'),
+      );
+
+      // Agregar headers
+      if (_token != null) {
+        request.headers['Authorization'] = 'Bearer $_token';
+      }
+
+      // Agregar archivo
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'foto',
+          imageBytes,
+          filename: 'etiqueta.jpg',
+        ),
+      );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al subir foto');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  // ========================================================================
+  // FIRMAS
+  // ========================================================================
+
+  /// Firmar trazabilidad
+  Future<Map<String, dynamic>> firmarTrazabilidad(int trazabilidadId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/firmas-trazabilidad/firmar/'),
+        headers: _getHeaders(),
+        body: json.encode({
+          'trazabilidad_id': trazabilidadId,
+        }),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al firmar trazabilidad');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  /// Cambiar estado de trazabilidad (solo Control de Calidad)
+  Future<Map<String, dynamic>> cambiarEstadoTrazabilidad({
+    required int trazabilidadId,
+    required String estado,
+    String? motivoRetencion,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/cambiar_estado/'),
+        headers: _getHeaders(),
+        body: json.encode({
+          'estado': estado,
+          'motivo_retencion': motivoRetencion,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al cambiar estado');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
 }

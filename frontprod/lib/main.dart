@@ -5,6 +5,7 @@ import 'providers/filtro_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'screens/seleccion_linea_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); 
@@ -74,7 +75,7 @@ class AuthWrapper extends StatelessWidget {
 
         // Si está autenticado, ir a home
         if (authService.isAuthenticated) {
-          return const HomeScreen();
+          return const SeleccionLineaScreen();
         }
 
         // Si no está autenticado, mostrar login

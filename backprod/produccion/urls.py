@@ -8,7 +8,13 @@ from .views import (
     TurnoViewSet,
     ColaboradorViewSet,
     ProductoViewSet,
-    TareaViewSet
+    TareaViewSet,
+    MaquinaViewSet,
+    TipoEventoViewSet,
+    HojaProcesosViewSet,
+    EventoProcesoViewSet,
+    TrazabilidadViewSet,
+    FirmaTrazabilidadViewSet,
 )
 
 # Router para los ViewSets
@@ -19,6 +25,12 @@ router.register(r'turnos', TurnoViewSet, basename='turno')
 router.register(r'colaboradores', ColaboradorViewSet, basename='colaborador')
 router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'tareas', TareaViewSet, basename='tarea')
+router.register(r'maquinas', MaquinaViewSet, basename='maquina')
+router.register(r'tipos-eventos', TipoEventoViewSet, basename='tipo-evento')
+router.register(r'hojas-procesos', HojaProcesosViewSet, basename='hoja-procesos')
+router.register(r'eventos-proceso', EventoProcesoViewSet, basename='evento-proceso')
+router.register(r'trazabilidades', TrazabilidadViewSet, basename='trazabilidad')
+router.register(r'firmas-trazabilidad', FirmaTrazabilidadViewSet, basename='firma-trazabilidad')
 
 urlpatterns = [
     # Autenticación JWT

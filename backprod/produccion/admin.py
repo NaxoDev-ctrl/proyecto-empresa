@@ -6,7 +6,10 @@ from django.utils.html import format_html
 from .models import (
     Usuario, Linea, Turno, Colaborador, 
     Producto, MateriaPrima, Receta, 
-    Tarea, TareaColaborador
+    Tarea, TareaColaborador, Maquina, TipoEvento,
+    HojaProcesos, EventoProceso, EventoMaquina,
+    Trazabilidad, TrazabilidadMateriaPrima,
+    Reproceso, Merma, FotoEtiqueta, FirmaTrazabilidad
 )
 
 
@@ -311,3 +314,317 @@ class TareaColaboradorAdmin(admin.ModelAdmin):
 admin.site.site_header = "Chocolatería Entrelagos - Administración"
 admin.site.site_title = "Admin Entrelagos"
 admin.site.index_title = "Panel de Administración"
+
+# ============================================================================
+# ADMIN: Maquina
+# ============================================================================
+@admin.register(Maquina)
+class MaquinaAdmin(admin.ModelAdmin):
+    """
+    Configuración del admin para Máquinas.
+    """
+    
+    list_display = ['codigo', 'nombre', 'activa']
+    list_filter = ['activa']
+    search_fields = ['codigo', 'nombre']
+    ordering = ['nombre']
+    
+    fieldsets = (
+        ('Información de la Máquina', {
+            'fields': ('codigo', 'nombre', 'activa')
+        }),
+    )
+
+
+# ============================================================================
+# ADMIN: TipoEvento
+# ============================================================================
+@admin.register(TipoEvento)
+class TipoEventoAdmin(admin.ModelAdmin):
+    """
+    Configuración del admin para Tipos de Eventos.
+    """
+    
+    list_display = ['orden', 'nombre', 'codigo', 'activo']
+    list_filter = ['activo']
+    search_fields = ['nombre', 'codigo']
+    ordering = ['orden']
+    
+    fieldsets = (
+        ('Información del Tipo de Evento', {
+            'fields': ('nombre', 'codigo', 'orden', 'activo')
+        }),
+        ('Descripción', {
+            'fields': ('descripcion',),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+# ============================================================================
+# ADMIN: EventoMaquina (Inline para EventoProceso)
+# ============================================================================
+class EventoMaquinaInline(admin.TabularInline):
+    """
+    Permite asignar máquinas a un evento de proceso.
+    """
+    model = EventoMaquina
+    extra = 1
+    fields = ['maquina']
+
+
+# ============================================================================
+# ADMIN: EventoProceso (Inline para HojaProcesos)
+# ============================================================================
+class EventoProcesoInline(admin.TabularInline):
+    """
+    Permite ver y editar eventos desde la hoja de procesos.
+    """
+    model = EventoProceso
+    extra = 0
+    fields = ['tipo_evento', 'hora_inicio', 'hora_fin', 'observaciones']
+    readonly_fields = ['hora_inicio']
+
+
+# ============================================================================
+# ADMIN: HojaProcesos
+# ============================================================================
+@admin.register(HojaProcesos)
+class HojaProcesosAdmin(admin.ModelAdmin):
+    """
+    Configuración del admin para Hojas de Procesos.
+    """
+    
+    list_display = ['tarea', 'fecha_inicio', 'fecha_finalizacion', 'finalizada']
+    list_filter = ['finalizada', 'fecha_inicio']
+    search_fields = ['tarea__producto__nombre', 'tarea__linea__nombre']
+    ordering = ['-fecha_inicio']
+    
+    fieldsets = (
+        ('Información de la Hoja de Procesos', {
+            'fields': ('tarea', 'finalizada')
+        }),
+        ('Fechas', {
+            'fields': ('fecha_inicio', 'fecha_finalizacion'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['fecha_inicio', 'fecha_finalizacion']
+    inlines = [EventoProcesoInline]
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Si está finalizada, no permitir editar"""
+        readonly = list(self.readonly_fields)
+        if obj and obj.finalizada:
+            readonly.extend(['tarea', 'finalizada'])
+        return readonly
+
+
+# ============================================================================
+# ADMIN: EventoProceso
+# ============================================================================
+@admin.register(EventoProceso)
+class EventoProcesoAdmin(admin.ModelAdmin):
+    """
+    Configuración del admin para Eventos de Procesos.
+    """
+    
+    list_display = ['hoja_procesos', 'tipo_evento', 'hora_inicio', 'hora_fin', 'duracion_minutos']
+    list_filter = ['tipo_evento', 'hora_inicio']
+    search_fields = ['hoja_procesos__tarea__producto__nombre']
+    ordering = ['-hora_inicio']
+    
+    fieldsets = (
+        ('Información del Evento', {
+            'fields': ('hoja_procesos', 'tipo_evento', 'hora_inicio', 'hora_fin')
+        }),
+        ('Observaciones', {
+            'fields': ('observaciones',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['duracion_minutos']
+    inlines = [EventoMaquinaInline]
+    
+    def duracion_minutos(self, obj):
+        """Muestra la duración del evento"""
+        return obj.duracion_minutos
+    
+    duracion_minutos.short_description = 'Duración (minutos)'
+
+
+# ============================================================================
+# ADMIN: TrazabilidadMateriaPrima (Inline para Trazabilidad)
+# ============================================================================
+class TrazabilidadMateriaPrimaInline(admin.TabularInline):
+    """
+    Permite ver las materias primas usadas desde la trazabilidad.
+    """
+    model = TrazabilidadMateriaPrima
+    extra = 0
+    fields = ['materia_prima', 'lote', 'cantidad_usada', 'unidad_medida']
+
+
+# ============================================================================
+# ADMIN: Reproceso (Inline para Trazabilidad)
+# ============================================================================
+class ReprocesoInline(admin.TabularInline):
+    """
+    Permite agregar reprocesos desde la trazabilidad.
+    """
+    model = Reproceso
+    extra = 0
+    fields = ['cantidad_kg', 'descripcion']
+
+
+# ============================================================================
+# ADMIN: Merma (Inline para Trazabilidad)
+# ============================================================================
+class MermaInline(admin.TabularInline):
+    """
+    Permite agregar mermas desde la trazabilidad.
+    """
+    model = Merma
+    extra = 0
+    fields = ['cantidad_kg', 'descripcion']
+
+
+# ============================================================================
+# ADMIN: FirmaTrazabilidad (Inline para Trazabilidad)
+# ============================================================================
+class FirmaTrazabilidadInline(admin.TabularInline):
+    """
+    Permite ver las firmas desde la trazabilidad.
+    """
+    model = FirmaTrazabilidad
+    extra = 0
+    fields = ['tipo_firma', 'usuario', 'fecha_firma']
+    readonly_fields = ['fecha_firma']
+
+
+# ============================================================================
+# ADMIN: Trazabilidad
+# ============================================================================
+@admin.register(Trazabilidad)
+class TrazabilidadAdmin(admin.ModelAdmin):
+    """
+    Configuración del admin para Trazabilidades.
+    """
+    
+    list_display = [
+        'hoja_procesos', 
+        'cantidad_producida', 
+        'estado_badge', 
+        'fecha_creacion',
+        'tiene_firmas'
+    ]
+    list_filter = ['estado', 'fecha_creacion']
+    search_fields = [
+        'hoja_procesos__tarea__producto__nombre',
+        'hoja_procesos__tarea__linea__nombre'
+    ]
+    ordering = ['-fecha_creacion']
+    
+    fieldsets = (
+        ('Información de la Trazabilidad', {
+            'fields': ('hoja_procesos', 'cantidad_producida', 'estado')
+        }),
+        ('Retención', {
+            'fields': ('motivo_retencion',),
+            'classes': ('collapse',)
+        }),
+        ('Observaciones', {
+            'fields': ('observaciones',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['fecha_creacion']
+    inlines = [
+        TrazabilidadMateriaPrimaInline,
+        ReprocesoInline,
+        MermaInline,
+        FirmaTrazabilidadInline
+    ]
+    
+    def estado_badge(self, obj):
+        """Muestra el estado con color"""
+        colors = {
+            'en_revision': '#ffc107',  # amarillo
+            'liberado': '#28a745',     # verde
+            'retenido': '#dc3545'      # rojo
+        }
+        color = colors.get(obj.estado, '#6c757d')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            color,
+            obj.get_estado_display()
+        )
+    
+    estado_badge.short_description = 'Estado'
+    
+    def tiene_firmas(self, obj):
+        """Muestra si tiene firmas"""
+        firmas = obj.firmas.all()
+        tiene_supervisor = firmas.filter(tipo_firma='supervisor').exists()
+        tiene_control_calidad = firmas.filter(tipo_firma='control_calidad').exists()
+        
+        icons = []
+        if tiene_supervisor:
+            icons.append('✓ Supervisor')
+        if tiene_control_calidad:
+            icons.append('✓ Control Calidad')
+        
+        return ', '.join(icons) if icons else '❌ Sin firmas'
+    
+    tiene_firmas.short_description = 'Firmas'
+
+
+# ============================================================================
+# ADMIN: FotoEtiqueta
+# ============================================================================
+@admin.register(FotoEtiqueta)
+class FotoEtiquetaAdmin(admin.ModelAdmin):
+    """
+    Configuración del admin para Fotos de Etiquetas.
+    """
+    
+    list_display = ['trazabilidad', 'fecha_subida', 'preview_foto']
+    list_filter = ['fecha_subida']
+    search_fields = ['trazabilidad__hoja_procesos__tarea__producto__nombre']
+    ordering = ['-fecha_subida']
+    
+    readonly_fields = ['fecha_subida', 'preview_foto']
+    
+    def preview_foto(self, obj):
+        """Muestra una miniatura de la foto"""
+        if obj.foto:
+            return format_html(
+                '<img src="{}" style="max-height: 100px; max-width: 200px;" />',
+                obj.foto.url
+            )
+        return "Sin foto"
+    
+    preview_foto.short_description = 'Vista previa'
+
+
+# ============================================================================
+# ADMIN: FirmaTrazabilidad
+# ============================================================================
+@admin.register(FirmaTrazabilidad)
+class FirmaTrazabilidadAdmin(admin.ModelAdmin):
+    """
+    Configuración del admin para Firmas de Trazabilidad.
+    """
+    
+    list_display = ['trazabilidad', 'tipo_firma', 'usuario', 'fecha_firma']
+    list_filter = ['tipo_firma', 'fecha_firma']
+    search_fields = [
+        'trazabilidad__hoja_procesos__tarea__producto__nombre',
+        'usuario__username'
+    ]
+    ordering = ['-fecha_firma']
+    
+    readonly_fields = ['fecha_firma']

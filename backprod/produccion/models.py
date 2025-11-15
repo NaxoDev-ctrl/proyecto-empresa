@@ -526,3 +526,540 @@ class TareaColaborador(models.Model):
     
     def __str__(self):
         return f"{self.tarea} - {self.colaborador.nombre_completo}"
+    
+# ============================================================================
+# MODELO: Maquina
+# ============================================================================
+class Maquina(models.Model):
+    """
+    Catálogo de máquinas disponibles en la planta.
+    Las máquinas pueden moverse entre líneas.
+    """
+    
+    nombre = models.CharField(
+        max_length=100,
+        help_text="Nombre de la máquina"
+    )
+    
+    codigo = models.CharField(
+        max_length=50,
+        unique=True,
+        help_text="Código único de la máquina"
+    )
+    
+    activa = models.BooleanField(
+        default=True,
+        help_text="Indica si la máquina está operativa"
+    )
+    
+    class Meta:
+        db_table = 'maquinas'
+        verbose_name = 'Máquina'
+        verbose_name_plural = 'Máquinas'
+        ordering = ['nombre']
+    
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
+    
+
+# ============================================================================
+# MODELO: TipoEvento
+# ============================================================================
+class TipoEvento(models.Model):
+    """
+    Catálogo de tipos de eventos para la hoja de procesos.
+    Los 11 tipos predefinidos de eventos.
+    """
+    
+    nombre = models.CharField(
+        max_length=50,
+        unique=True,
+        help_text="Nombre del tipo de evento"
+    )
+    
+    codigo = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text="Código del tipo de evento"
+    )
+    
+    descripcion = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Descripción del tipo de evento"
+    )
+    
+    orden = models.PositiveIntegerField(
+        default=0,
+        help_text="Orden de visualización"
+    )
+    
+    activo = models.BooleanField(
+        default=True,
+        help_text="Indica si el tipo de evento está activo"
+    )
+    
+    class Meta:
+        db_table = 'tipos_eventos'
+        verbose_name = 'Tipo de Evento'
+        verbose_name_plural = 'Tipos de Eventos'
+        ordering = ['orden', 'nombre']
+    
+    def __str__(self):
+        return self.nombre
+
+
+# ============================================================================
+# MODELO: HojaProcesos
+# ============================================================================
+class HojaProcesos(models.Model):
+    """
+    Hoja de procesos que registra todos los eventos de tiempo
+    durante la producción de una tarea.
+    """
+    
+    tarea = models.OneToOneField(
+        Tarea,
+        on_delete=models.CASCADE,
+        related_name='hoja_procesos',
+        help_text="Tarea asociada a esta hoja de procesos"
+    )
+    
+    fecha_inicio = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Fecha y hora de inicio de la hoja de procesos"
+    )
+    
+    fecha_finalizacion = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Fecha y hora de finalización de la hoja de procesos"
+    )
+    
+    finalizada = models.BooleanField(
+        default=False,
+        help_text="Indica si la hoja de procesos está finalizada"
+    )
+    
+    class Meta:
+        db_table = 'hojas_procesos'
+        verbose_name = 'Hoja de Procesos'
+        verbose_name_plural = 'Hojas de Procesos'
+        ordering = ['-fecha_inicio']
+    
+    def __str__(self):
+        return f"Hoja Procesos - {self.tarea}"
+    
+    def finalizar(self):
+        """Marca la hoja de procesos como finalizada"""
+        from django.utils import timezone
+        from django.core.exceptions import ValidationError
+        
+        if self.finalizada:
+            raise ValidationError('Esta hoja de procesos ya está finalizada')
+        
+        self.finalizada = True
+        self.fecha_finalizacion = timezone.now()
+        self.save()
+
+
+# ============================================================================
+# MODELO: EventoProceso
+# ============================================================================
+class EventoProceso(models.Model):
+    """
+    Registra cada evento individual en la hoja de procesos
+    (setup inicial, templado, producción, etc.)
+    """
+    
+    hoja_procesos = models.ForeignKey(
+        HojaProcesos,
+        on_delete=models.CASCADE,
+        related_name='eventos',
+        help_text="Hoja de procesos a la que pertenece este evento"
+    )
+    
+    tipo_evento = models.ForeignKey(
+        TipoEvento,
+        on_delete=models.PROTECT,
+        related_name='eventos',
+        help_text="Tipo de evento"
+    )
+    
+    hora_inicio = models.DateTimeField(
+        help_text="Hora de inicio del evento"
+    )
+    
+    hora_fin = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Hora de fin del evento"
+    )
+    
+    observaciones = models.TextField(
+        blank=True,
+        null=True,
+        max_length=500,
+        help_text="Observaciones sobre este evento"
+    )
+    
+    class Meta:
+        db_table = 'eventos_procesos'
+        verbose_name = 'Evento de Proceso'
+        verbose_name_plural = 'Eventos de Procesos'
+        ordering = ['hora_inicio']
+    
+    def __str__(self):
+        return f"{self.tipo_evento.nombre} - {self.hora_inicio.strftime('%H:%M')}"
+    
+    @property
+    def duracion_minutos(self):
+        """Calcula la duración del evento en minutos"""
+        if self.hora_inicio and self.hora_fin:
+            delta = self.hora_fin - self.hora_inicio
+            return int(delta.total_seconds() / 60)
+        return None
+
+
+# ============================================================================
+# MODELO: EventoMaquina
+# ============================================================================
+class EventoMaquina(models.Model):
+    """
+    Relación many-to-many entre EventoProceso y Maquina.
+    Registra qué máquinas se usaron en cada evento.
+    """
+    
+    evento = models.ForeignKey(
+        EventoProceso,
+        on_delete=models.CASCADE,
+        related_name='evento_maquinas',
+        help_text="Evento de proceso"
+    )
+    
+    maquina = models.ForeignKey(
+        Maquina,
+        on_delete=models.PROTECT,
+        related_name='eventos',
+        help_text="Máquina utilizada"
+    )
+    
+    class Meta:
+        db_table = 'eventos_maquinas'
+        verbose_name = 'Máquina en Evento'
+        verbose_name_plural = 'Máquinas en Eventos'
+        unique_together = ['evento', 'maquina']
+    
+    def __str__(self):
+        return f"{self.evento} - {self.maquina.nombre}"
+
+
+# ============================================================================
+# MODELO: Trazabilidad
+# ============================================================================
+class Trazabilidad(models.Model):
+    """
+    Trazabilidad de producción. Se crea después de finalizar
+    la hoja de procesos.
+    """
+    
+    ESTADOS = [
+        ('en_revision', 'En Revisión'),
+        ('liberado', 'Liberado'),
+        ('retenido', 'Retenido'),
+    ]
+    
+    hoja_procesos = models.OneToOneField(
+        HojaProcesos,
+        on_delete=models.CASCADE,
+        related_name='trazabilidad',
+        help_text="Hoja de procesos asociada"
+    )
+    
+    cantidad_producida = models.PositiveIntegerField(
+        help_text="Cantidad producida en unidades"
+    )
+    
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADOS,
+        default='en_revision',
+        help_text="Estado de la trazabilidad"
+    )
+    
+    motivo_retencion = models.TextField(
+        blank=True,
+        null=True,
+        max_length=500,
+        help_text="Motivo de retención (obligatorio si estado es 'retenido')"
+    )
+    
+    observaciones = models.TextField(
+        blank=True,
+        null=True,
+        max_length=500,
+        help_text="Observaciones generales"
+    )
+    
+    fecha_creacion = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Fecha y hora de creación de la trazabilidad"
+    )
+    
+    class Meta:
+        db_table = 'trazabilidades'
+        verbose_name = 'Trazabilidad'
+        verbose_name_plural = 'Trazabilidades'
+        ordering = ['-fecha_creacion']
+    
+    def __str__(self):
+        return f"Trazabilidad - {self.hoja_procesos.tarea}"
+    
+    def clean(self):
+        """Validaciones personalizadas"""
+        super().clean()
+        
+        if self.estado == 'retenido' and not self.motivo_retencion:
+            raise ValidationError({
+                'motivo_retencion': 'El motivo de retención es obligatorio cuando el estado es "Retenido"'
+            })
+
+
+# ============================================================================
+# MODELO: TrazabilidadMateriaPrima
+# ============================================================================
+class TrazabilidadMateriaPrima(models.Model):
+    """
+    Registra los lotes y cantidades de materias primas usadas
+    en la producción.
+    """
+    
+    UNIDADES_MEDIDA = [
+        ('kg', 'Kilogramos'),
+        ('unidades', 'Unidades'),
+    ]
+    
+    trazabilidad = models.ForeignKey(
+        Trazabilidad,
+        on_delete=models.CASCADE,
+        related_name='materias_primas_usadas',
+        help_text="Trazabilidad a la que pertenece"
+    )
+    
+    materia_prima = models.ForeignKey(
+        MateriaPrima,
+        on_delete=models.PROTECT,
+        related_name='trazabilidades',
+        help_text="Materia prima utilizada"
+    )
+    
+    lote = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Lote de la materia prima (puede ser null si no requiere lote)"
+    )
+    
+    cantidad_usada = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Cantidad de materia prima usada"
+    )
+    
+    unidad_medida = models.CharField(
+        max_length=20,
+        choices=UNIDADES_MEDIDA,
+        default='kg',
+        help_text="Unidad de medida de la cantidad"
+    )
+    
+    class Meta:
+        db_table = 'trazabilidad_materias_primas'
+        verbose_name = 'Materia Prima Usada'
+        verbose_name_plural = 'Materias Primas Usadas'
+        unique_together = ['trazabilidad', 'materia_prima']
+        ordering = ['materia_prima__codigo']
+    
+    def __str__(self):
+        return f"{self.materia_prima.nombre} - {self.cantidad_usada} {self.get_unidad_medida_display()}"
+    
+    def clean(self):
+        """Validaciones personalizadas"""
+        super().clean()
+        
+        # Si la materia prima requiere lote, el lote es obligatorio
+        if self.materia_prima.requiere_lote and not self.lote:
+            raise ValidationError({
+                'lote': f'La materia prima "{self.materia_prima.nombre}" requiere lote'
+            })
+
+
+# ============================================================================
+# MODELO: Reproceso
+# ============================================================================
+class Reproceso(models.Model):
+    """
+    Registra los reprocesos ocurridos durante la producción.
+    """
+    
+    trazabilidad = models.ForeignKey(
+        Trazabilidad,
+        on_delete=models.CASCADE,
+        related_name='reprocesos',
+        help_text="Trazabilidad a la que pertenece"
+    )
+    
+    cantidad_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Cantidad de reproceso en kilogramos"
+    )
+    
+    descripcion = models.TextField(
+        max_length=500,
+        help_text="Descripción del reproceso"
+    )
+    
+    class Meta:
+        db_table = 'reprocesos'
+        verbose_name = 'Reproceso'
+        verbose_name_plural = 'Reprocesos'
+        ordering = ['id']
+    
+    def __str__(self):
+        return f"Reproceso - {self.cantidad_kg} kg"
+
+
+# ============================================================================
+# MODELO: Merma
+# ============================================================================
+class Merma(models.Model):
+    """
+    Registra las mermas ocurridas durante la producción.
+    """
+    
+    trazabilidad = models.ForeignKey(
+        Trazabilidad,
+        on_delete=models.CASCADE,
+        related_name='mermas',
+        help_text="Trazabilidad a la que pertenece"
+    )
+    
+    cantidad_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Cantidad de merma en kilogramos"
+    )
+    
+    descripcion = models.TextField(
+        max_length=500,
+        help_text="Descripción de la merma"
+    )
+    
+    class Meta:
+        db_table = 'mermas'
+        verbose_name = 'Merma'
+        verbose_name_plural = 'Mermas'
+        ordering = ['id']
+    
+    def __str__(self):
+        return f"Merma - {self.cantidad_kg} kg"
+
+
+# ============================================================================
+# MODELO: FotoEtiqueta
+# ============================================================================
+class FotoEtiqueta(models.Model):
+    """
+    Almacena la foto de las etiquetas usadas en la producción.
+    """
+    
+    trazabilidad = models.OneToOneField(
+        Trazabilidad,
+        on_delete=models.CASCADE,
+        related_name='foto_etiqueta',
+        help_text="Trazabilidad a la que pertenece"
+    )
+    
+    foto = models.ImageField(
+        upload_to='etiquetas/%Y/%m/%d/',
+        help_text="Foto de las etiquetas"
+    )
+    
+    fecha_subida = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Fecha y hora de subida de la foto"
+    )
+    
+    class Meta:
+        db_table = 'fotos_etiquetas'
+        verbose_name = 'Foto de Etiqueta'
+        verbose_name_plural = 'Fotos de Etiquetas'
+    
+    def __str__(self):
+        return f"Foto Etiqueta - {self.trazabilidad}"
+
+
+# ============================================================================
+# MODELO: FirmaTrazabilidad
+# ============================================================================
+class FirmaTrazabilidad(models.Model):
+    """
+    Registra las firmas digitales de supervisor y control de calidad.
+    """
+    
+    TIPOS_FIRMA = [
+        ('supervisor', 'Supervisor'),
+        ('control_calidad', 'Control de Calidad'),
+    ]
+    
+    trazabilidad = models.ForeignKey(
+        Trazabilidad,
+        on_delete=models.CASCADE,
+        related_name='firmas',
+        help_text="Trazabilidad a la que pertenece"
+    )
+    
+    tipo_firma = models.CharField(
+        max_length=20,
+        choices=TIPOS_FIRMA,
+        help_text="Tipo de firma"
+    )
+    
+    usuario = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name='firmas_trazabilidad',
+        help_text="Usuario que firmó"
+    )
+    
+    fecha_firma = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Fecha y hora de la firma"
+    )
+    
+    class Meta:
+        db_table = 'firmas_trazabilidad'
+        verbose_name = 'Firma de Trazabilidad'
+        verbose_name_plural = 'Firmas de Trazabilidad'
+        unique_together = ['trazabilidad', 'tipo_firma']
+        ordering = ['fecha_firma']
+    
+    def __str__(self):
+        return f"{self.get_tipo_firma_display()} - {self.usuario.username}"
+    
+    def clean(self):
+        """Validaciones personalizadas"""
+        super().clean()
+        
+        # Validar que el usuario tenga el rol correcto
+        if self.tipo_firma == 'supervisor' and self.usuario.rol != 'supervisor':
+            raise ValidationError({
+                'usuario': 'El usuario debe tener rol de supervisor para firmar como supervisor'
+            })
+        
+        if self.tipo_firma == 'control_calidad' and self.usuario.rol != 'control_calidad':
+            raise ValidationError({
+                'usuario': 'El usuario debe tener rol de control de calidad para firmar como control de calidad'
+            })
+

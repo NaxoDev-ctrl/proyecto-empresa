@@ -197,6 +197,7 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Flutter web en desarrollo
     "http://127.0.0.1:3000",
+    "http://192.168.0.11:8000",  # IP local del servidor Django
 ]
 
 # Para desarrollo, permite todos los orígenes (cambiar en producción)

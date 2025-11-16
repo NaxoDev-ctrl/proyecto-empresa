@@ -47,3 +47,25 @@ class IsSupervisorOrReadOnly(permissions.BasePermission):
             hasattr(request.user, 'rol') and
             request.user.rol == 'supervisor'
         )
+    
+    
+class AllowAnyAccess(permissions.BasePermission):
+    """
+    Permiso que permite TODO sin autenticación.
+    
+    Usado para endpoints de operarios anónimos que necesitan:
+    - GET: Ver datos
+    - POST: Crear hojas de procesos, eventos, trazabilidades
+    - PUT/PATCH: Actualizar sus registros
+    
+    IMPORTANTE: Este permiso debe usarse SOLO en endpoints donde
+    los operarios necesiten registrar información de producción.
+    """
+    
+    def has_permission(self, request, view):
+        # Permitir TODO sin autenticación
+        return True
+
+
+
+

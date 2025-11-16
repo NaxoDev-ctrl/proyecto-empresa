@@ -79,7 +79,7 @@ class AuthWrapper extends StatelessWidget {
         }
 
         // Si no está autenticado, mostrar login
-        return const LoginScreen();
+        return const SeleccionLineaScreen();
       },
     );
   }

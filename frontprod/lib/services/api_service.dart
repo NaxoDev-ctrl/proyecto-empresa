@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   // IMPORTANTE: Cambia esta URL según tu configuración
   // Para emulador Android: 'http://10.0.2.2:8000'
   // Para emulador iOS: 'http://127.0.0.1:8000'
-  // Para dispositivo físico: 'http://TU_IP_LOCAL:8000'
+  // Para dispositivo físico: 'http://192.168.0.11:8000'
   static const String baseUrl = 'http://127.0.0.1:8000/api';
 
   // Singleton pattern
@@ -473,13 +474,12 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/tareas/$id/iniciar/'),
-        headers: _getHeaders(),
+        headers: _getHeaders(needsAuth: false),
       );
 
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(utf8.decode(response.bodyBytes));
-        final data = jsonResponse is List ? jsonResponse : jsonResponse['results'];
-        return data;
+        return jsonResponse;
       } else {
         _handleError(response);
         throw Exception('Error al iniciar tarea');
@@ -792,17 +792,14 @@ class ApiService {
         Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/subir_foto_etiqueta/'),
       );
 
-      // Agregar headers
-      if (_token != null) {
-        request.headers['Authorization'] = 'Bearer $_token';
-      }
 
       // Agregar archivo
       request.files.add(
         http.MultipartFile.fromBytes(
           'foto',
           imageBytes,
-          filename: 'etiqueta.jpg',
+          filename: 'etiqueta_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          contentType: MediaType('image', 'jpeg'),
         ),
       );
 

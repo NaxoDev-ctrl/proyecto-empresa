@@ -33,7 +33,7 @@ from .serializers import (
     FirmaTrazabilidadSerializer
 
 )
-from .permissions import IsSupervisor, IsSupervisorOrReadOnly
+from .permissions import IsSupervisor, IsSupervisorOrReadOnly, AllowAnyAccess
 
 
 # ============================================================================
@@ -70,7 +70,7 @@ class LineaViewSet(viewsets.ReadOnlyModelViewSet):
     Solo lectura (las líneas se gestionan desde el admin).
     """
     serializer_class = LineaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAnyAccess]
     queryset = Linea.objects.filter(activa=True).order_by('nombre')
     filter_backends = [filters.SearchFilter]
     search_fields = ['nombre']
@@ -85,7 +85,7 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
     Solo lectura (los turnos se gestionan desde el admin).
     """
     serializer_class = TurnoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAnyAccess]
     queryset = Turno.objects.filter(activo=True).order_by('hora_inicio')
 
 
@@ -211,7 +211,7 @@ class ProductoViewSet(viewsets.ReadOnlyModelViewSet):
     ViewSet para Productos.
     Solo lectura (los productos se gestionan desde el admin).
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAnyAccess]
     queryset = Producto.objects.filter(activo=True).order_by('codigo')
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['codigo', 'nombre']
@@ -232,7 +232,7 @@ class TareaViewSet(viewsets.ModelViewSet):
     ViewSet para Tareas.
     CRUD completo para supervisores.
     """
-    permission_classes = [IsAuthenticated, IsSupervisorOrReadOnly]
+    permission_classes = [AllowAnyAccess]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['producto__codigo', 'producto__nombre', 'observaciones']
     ordering_fields = ['fecha', 'estado']
@@ -318,7 +318,7 @@ class TareaViewSet(viewsets.ModelViewSet):
         serializer = TareaListSerializer(tareas, many=True)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def iniciar(self, request, pk=None):
         """
         Endpoint: POST /api/tareas/{id}/iniciar/
@@ -340,7 +340,7 @@ class TareaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def finalizar(self, request, pk=None):
         """
         Endpoint: POST /api/tareas/{id}/finalizar/
@@ -424,7 +424,7 @@ class MaquinaViewSet(viewsets.ReadOnlyModelViewSet):
     Solo lectura (las máquinas se gestionan desde el admin).
     """
     serializer_class = MaquinaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAnyAccess]
     queryset = Maquina.objects.filter(activa=True).order_by('nombre')
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['codigo', 'nombre']
@@ -440,7 +440,7 @@ class TipoEventoViewSet(viewsets.ReadOnlyModelViewSet):
     Solo lectura (los tipos de eventos se gestionan desde el admin).
     """
     serializer_class = TipoEventoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAnyAccess]
     queryset = TipoEvento.objects.filter(activo=True).order_by('orden')
     filter_backends = [filters.SearchFilter]
     search_fields = ['nombre', 'codigo']
@@ -454,7 +454,7 @@ class HojaProcesosViewSet(viewsets.ModelViewSet):
     ViewSet para Hojas de Procesos.
     Permite crear, listar y ver detalles de hojas de procesos.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAnyAccess]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['tarea__producto__nombre', 'tarea__linea__nombre']
     ordering_fields = ['fecha_inicio', 'finalizada']
@@ -492,7 +492,7 @@ class HojaProcesosViewSet(viewsets.ModelViewSet):
             return HojaProcesosListSerializer
         return HojaProcesosDetailSerializer
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def finalizar(self, request, pk=None):
         """
         Endpoint: POST /api/hojas-procesos/{id}/finalizar/
@@ -552,7 +552,7 @@ class EventoProcesoViewSet(viewsets.ModelViewSet):
     ViewSet para Eventos de Proceso.
     Permite CRUD completo de eventos dentro de una hoja de procesos.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAnyAccess]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['hora_inicio']
     
@@ -578,7 +578,7 @@ class EventoProcesoViewSet(viewsets.ModelViewSet):
             return EventoProcesoCreateUpdateSerializer
         return EventoProcesoListSerializer
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def finalizar_evento(self, request, pk=None):
         """
         Endpoint: POST /api/eventos-proceso/{id}/finalizar_evento/
@@ -613,7 +613,7 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
     ViewSet para Trazabilidades.
     Permite CRUD completo y gestión de firmas/estados.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAnyAccess]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
         'hoja_procesos__tarea__producto__nombre',
@@ -684,7 +684,7 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
         serializer = TrazabilidadListSerializer(trazabilidades, many=True)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def cambiar_estado(self, request, pk=None):
         """
         Endpoint: POST /api/trazabilidades/{id}/cambiar_estado/
@@ -734,7 +734,7 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def subir_foto_etiqueta(self, request, pk=None):
         """
         Endpoint: POST /api/trazabilidades/{id}/subir_foto_etiqueta/

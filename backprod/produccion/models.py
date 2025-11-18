@@ -7,6 +7,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from datetime import date
+from .validators import validate_image_file
 
 
 # ============================================================================
@@ -779,6 +780,15 @@ class Trazabilidad(models.Model):
     cantidad_producida = models.PositiveIntegerField(
         help_text="Cantidad producida en unidades"
     )
+    # NUEVO CAMPO: Foto de etiquetas directamente en el modelo
+    foto_etiquetas = models.ImageField(
+        upload_to='trazabilidad/etiquetas/%Y/%m/%d/',
+        verbose_name='Foto de Etiquetas',
+        null=True,
+        blank=True,
+        validators=[validate_image_file],
+        help_text='Foto de las etiquetas utilizadas en la producción'
+    )
     
     estado = models.CharField(
         max_length=20,
@@ -824,6 +834,23 @@ class Trazabilidad(models.Model):
                 'motivo_retencion': 'El motivo de retención es obligatorio cuando el estado es "Retenido"'
             })
 
+    @property
+    def producto_nombre(self):
+        """Nombre del producto producido"""
+        return self.hoja_procesos.tarea.producto.nombre
+    
+    @property
+    def linea_nombre(self):
+        """Nombre de la línea donde se produjo"""
+        return self.hoja_procesos.tarea.linea.nombre
+    
+    @property
+    def tiene_firmas_completas(self):
+        """Verifica si tiene ambas firmas requeridas"""
+        return (
+            self.firmas.filter(tipo_firma='supervisor').exists() and
+            self.firmas.filter(tipo_firma='control_calidad').exists()
+        )
 
 # ============================================================================
 # MODELO: TrazabilidadMateriaPrima
@@ -965,8 +992,7 @@ class Merma(models.Model):
     def __str__(self):
         return f"Merma - {self.cantidad_kg} kg"
 
-
-# ============================================================================
+    # ============================================================================
 # MODELO: FotoEtiqueta
 # ============================================================================
 class FotoEtiqueta(models.Model):

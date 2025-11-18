@@ -35,6 +35,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   List<Map<String, dynamic>> _reprocesos = [];
   List<Map<String, dynamic>> _mermas = [];
   Uint8List? _fotoEtiqueta;
+  String? _nombreArchivoFoto;
   
   bool _isLoading = true;
   bool _isSaving = false;
@@ -100,6 +101,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         final bytes = await image.readAsBytes();
         setState(() {
           _fotoEtiqueta = bytes;
+          _nombreArchivoFoto = image.name;
         });
       }
     } catch (e) {
@@ -124,6 +126,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         final bytes = await image.readAsBytes();
         setState(() {
           _fotoEtiqueta = bytes;
+          _nombreArchivoFoto = image.name;
         });
       }
     } catch (e) {
@@ -233,12 +236,8 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         observaciones: _observacionesController.text.isEmpty 
             ? null 
             : _observacionesController.text,
-      );
-
-      // Subir foto de etiqueta
-      await _apiService.subirFotoEtiqueta(
-        trazabilidadData['id'],
-        _fotoEtiqueta!.toList(),
+        fotoEtiquetas: _fotoEtiqueta, 
+        nombreArchivoFoto: _nombreArchivoFoto,
       );
 
       if (!mounted) return;

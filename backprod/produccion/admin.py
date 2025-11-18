@@ -9,7 +9,7 @@ from .models import (
     Tarea, TareaColaborador, Maquina, TipoEvento,
     HojaProcesos, EventoProceso, EventoMaquina,
     Trazabilidad, TrazabilidadMateriaPrima,
-    Reproceso, Merma, FotoEtiqueta, FirmaTrazabilidad
+    Reproceso, Merma, FirmaTrazabilidad
 )
 
 
@@ -580,34 +580,6 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         return ', '.join(icons) if icons else '❌ Sin firmas'
     
     tiene_firmas.short_description = 'Firmas'
-
-
-# ============================================================================
-# ADMIN: FotoEtiqueta
-# ============================================================================
-@admin.register(FotoEtiqueta)
-class FotoEtiquetaAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Fotos de Etiquetas.
-    """
-    
-    list_display = ['trazabilidad', 'fecha_subida', 'preview_foto']
-    list_filter = ['fecha_subida']
-    search_fields = ['trazabilidad__hoja_procesos__tarea__producto__nombre']
-    ordering = ['-fecha_subida']
-    
-    readonly_fields = ['fecha_subida', 'preview_foto']
-    
-    def preview_foto(self, obj):
-        """Muestra una miniatura de la foto"""
-        if obj.foto:
-            return format_html(
-                '<img src="{}" style="max-height: 100px; max-width: 200px;" />',
-                obj.foto.url
-            )
-        return "Sin foto"
-    
-    preview_foto.short_description = 'Vista previa'
 
 
 # ============================================================================

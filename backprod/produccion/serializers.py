@@ -7,6 +7,8 @@ from .models import (
     Trazabilidad, TrazabilidadMateriaPrima,
     Reproceso, Merma, FotoEtiqueta, FirmaTrazabilidad
 )
+from django.core.exceptions import ValidationError as DjangoValidationError
+import json
 
 # ============================================================================
 # SERIALIZER: Usuario
@@ -808,6 +810,8 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
     mermas = MermaSerializer(many=True, read_only=True)
     foto_etiqueta = FotoEtiquetaSerializer(read_only=True)
     firmas = FirmaTrazabilidadSerializer(many=True, read_only=True)
+    # AGREGAR ESTE CAMPO para mostrar la URL de la foto
+    foto_etiquetas_url = serializers.SerializerMethodField()
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     
     class Meta:
@@ -817,6 +821,8 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
             'hoja_procesos',
             'hoja_procesos_detalle',
             'cantidad_producida',
+            'foto_etiquetas',
+            'foto_etiquetas_url',
             'estado',
             'estado_display',
             'motivo_retencion',
@@ -829,34 +835,58 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
             'firmas'
         ]
 
+    def get_foto_etiquetas_url(self, obj):
+        """Retorna la URL completa de la foto si existe"""
+        if obj.foto_etiquetas:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.foto_etiquetas.url)
+            return obj.foto_etiquetas.url
+        return None
+
+class JSONStringField(serializers.Field):
+    """
+    Campo personalizado que acepta JSON como string o como objeto Python.
+    """
+    
+    def to_internal_value(self, data):
+        """Convierte string JSON a objeto Python"""
+        print(f'\n🔍 JSONStringField.to_internal_value recibió tipo: {type(data)}')
+        print(f'🔍 Valor: {data}')
+        
+        if isinstance(data, str):
+            try:
+                parsed = json.loads(data)
+                print(f'✅ JSON parseado correctamente: {type(parsed)}')
+                return parsed
+            except json.JSONDecodeError as e:
+                print(f'❌ Error al parsear JSON: {e}')
+                raise serializers.ValidationError(f'JSON inválido: {str(e)}')
+        elif isinstance(data, (list, dict)):
+            print(f'✅ Ya es un objeto Python')
+            return data
+        else:
+            print(f'❌ Tipo no soportado: {type(data)}')
+            raise serializers.ValidationError(f'Se esperaba JSON, recibido: {type(data).__name__}')
+    
+    def to_representation(self, value):
+        """Convierte objeto Python a JSON para respuesta"""
+        return value
 
 # ============================================================================
 # SERIALIZER: Trazabilidad (Crear/Actualizar)
 # ============================================================================
 class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
     """
-    Serializer para crear y actualizar trazabilidades.
+    Serializer para crear y actualizar Trazabilidad.
+    Usa CharField para recibir JSON como strings desde multipart/form-data.
     """
     
-    materias_primas = serializers.ListField(
-        child=serializers.DictField(),
-        write_only=True,
-        required=True
-    )
-    
-    reprocesos_data = serializers.ListField(
-        child=serializers.DictField(),
-        write_only=True,
-        required=False,
-        allow_empty=True
-    )
-    
-    mermas_data = serializers.ListField(
-        child=serializers.DictField(),
-        write_only=True,
-        required=False,
-        allow_empty=True
-    )
+    # USAR CHARFIELD en lugar de JSONField para aceptar strings
+    materias_primas = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    reprocesos_data = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    mermas_data = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    foto_etiquetas = serializers.ImageField(required=False, allow_null=True)
     
     class Meta:
         model = Trazabilidad
@@ -864,103 +894,207 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
             'id',
             'hoja_procesos',
             'cantidad_producida',
+            'foto_etiquetas',
             'estado',
             'motivo_retencion',
             'observaciones',
             'materias_primas',
             'reprocesos_data',
-            'mermas_data'
+            'mermas_data',
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'estado']
     
-    def validate(self, data):
-        """Validaciones adicionales"""
-        # Validar motivo de retención
-        if data.get('estado') == 'retenido' and not data.get('motivo_retencion'):
-            raise serializers.ValidationError({
-                'motivo_retencion': 'El motivo de retención es obligatorio cuando el estado es "Retenido"'
-            })
+    def validate_materias_primas(self, value):
+        """Parsear y validar materias primas"""
+        print(f'\n🔍 validate_materias_primas recibió: {type(value)} = {value}')
         
-        return data
+        # Si está vacío o es None
+        if not value or value == 'null':
+            print('  ℹ️  Vacío o null, retornando lista vacía')
+            return []
+        
+        # Parsear string JSON
+        try:
+            parsed = json.loads(value)
+            print(f'  ✅ JSON parseado: {type(parsed)} con {len(parsed)} elementos')
+        except json.JSONDecodeError as e:
+            print(f'  ❌ Error al parsear JSON: {e}')
+            raise serializers.ValidationError(f'JSON inválido: {str(e)}')
+        
+        # Validar que sea lista
+        if not isinstance(parsed, list):
+            print(f'  ❌ No es lista, es {type(parsed)}')
+            raise serializers.ValidationError('Debe ser una lista')
+        
+        # Validar cada elemento
+        for i, mp in enumerate(parsed):
+            if not isinstance(mp, dict):
+                raise serializers.ValidationError(f'Elemento {i} debe ser un diccionario')
+            
+            required_fields = ['materia_prima_id', 'cantidad_usada', 'unidad_medida']
+            missing = [f for f in required_fields if f not in mp]
+            
+            if missing:
+                raise serializers.ValidationError(
+                    f'Elemento {i}: faltan campos {missing}'
+                )
+            
+            print(f'    ✅ MP {i}: {mp["materia_prima_id"]} - {mp["cantidad_usada"]} {mp["unidad_medida"]}')
+        
+        return parsed  # Retornar como lista Python
+    
+    def validate_reprocesos_data(self, value):
+        """Parsear y validar reprocesos"""
+        if not value or value == 'null':
+            return []
+        
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as e:
+            raise serializers.ValidationError(f'JSON inválido: {str(e)}')
+        
+        if not isinstance(parsed, list):
+            raise serializers.ValidationError('Debe ser una lista')
+        
+        for i, reproceso in enumerate(parsed):
+            if not isinstance(reproceso, dict):
+                raise serializers.ValidationError(f'Elemento {i} debe ser un diccionario')
+            
+            if 'cantidad_kg' not in reproceso or 'descripcion' not in reproceso:
+                raise serializers.ValidationError(
+                    f'Elemento {i}: faltan campos (cantidad_kg, descripcion)'
+                )
+        
+        return parsed
+    
+    def validate_mermas_data(self, value):
+        """Parsear y validar mermas"""
+        if not value or value == 'null':
+            return []
+        
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as e:
+            raise serializers.ValidationError(f'JSON inválido: {str(e)}')
+        
+        if not isinstance(parsed, list):
+            raise serializers.ValidationError('Debe ser una lista')
+        
+        for i, merma in enumerate(parsed):
+            if not isinstance(merma, dict):
+                raise serializers.ValidationError(f'Elemento {i} debe ser un diccionario')
+            
+            if 'cantidad_kg' not in merma or 'descripcion' not in merma:
+                raise serializers.ValidationError(
+                    f'Elemento {i}: faltan campos (cantidad_kg, descripcion)'
+                )
+        
+        return parsed
+    
+    def validate(self, attrs):
+        """Validación general"""
+        print('\n' + '='*70)
+        print('VALIDACIÓN GENERAL')
+        print('='*70)
+        
+        for key, value in attrs.items():
+            if key == 'foto_etiquetas':
+                print(f'  {key}: <IMAGE>')
+            elif key in ['materias_primas', 'reprocesos_data', 'mermas_data']:
+                print(f'  {key}: lista con {len(value)} elementos')
+            else:
+                print(f'  {key}: {value}')
+        
+        print('='*70 + '\n')
+        return attrs
     
     def create(self, validated_data):
-        """Crea la trazabilidad con todas sus relaciones"""
-        materias_primas_data = validated_data.pop('materias_primas')
-        reprocesos_data = validated_data.pop('reprocesos_data', [])
-        mermas_data = validated_data.pop('mermas_data', [])
+        """Crear trazabilidad con sus relaciones"""
         
-        # Crear la trazabilidad
+        print('='*70)
+        print('CREANDO TRAZABILIDAD')
+        print('='*70)
+        
+        # Extraer datos relacionados (ya son listas Python, no strings)
+        materias_primas_data = validated_data.pop('materias_primas', []) or []
+        reprocesos_data = validated_data.pop('reprocesos_data', []) or []
+        mermas_data = validated_data.pop('mermas_data', []) or []
+        
+        print(f'Hoja Procesos: {validated_data.get("hoja_procesos")}')
+        print(f'Cantidad: {validated_data.get("cantidad_producida")}')
+        print(f'Foto: {"Sí" if validated_data.get("foto_etiquetas") else "No"}')
+        print(f'Materias primas: {len(materias_primas_data)}')
+        print(f'Reprocesos: {len(reprocesos_data)}')
+        print(f'Mermas: {len(mermas_data)}')
+        
+        # Crear trazabilidad
         trazabilidad = Trazabilidad.objects.create(**validated_data)
+        print(f'✅ Trazabilidad creada: ID {trazabilidad.id}')
         
         # Crear materias primas usadas
-        for mp_data in materias_primas_data:
-            TrazabilidadMateriaPrima.objects.create(
-                trazabilidad=trazabilidad,
-                materia_prima_id=mp_data['materia_prima_id'],
-                lote=mp_data.get('lote'),
-                cantidad_usada=mp_data['cantidad_usada'],
-                unidad_medida=mp_data['unidad_medida']
-            )
-        
-        # Crear reprocesos
-        for reproceso_data in reprocesos_data:
-            Reproceso.objects.create(
-                trazabilidad=trazabilidad,
-                **reproceso_data
-            )
-        
-        # Crear mermas
-        for merma_data in mermas_data:
-            Merma.objects.create(
-                trazabilidad=trazabilidad,
-                **merma_data
-            )
-        
-        return trazabilidad
-    
-    def update(self, instance, validated_data):
-        """Actualiza la trazabilidad"""
-        materias_primas_data = validated_data.pop('materias_primas', None)
-        reprocesos_data = validated_data.pop('reprocesos_data', None)
-        mermas_data = validated_data.pop('mermas_data', None)
-        
-        # Actualizar campos de la trazabilidad
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        
-        # Actualizar materias primas si se enviaron
-        if materias_primas_data is not None:
-            instance.materias_primas_usadas.all().delete()
-            for mp_data in materias_primas_data:
+        for i, mp_data in enumerate(materias_primas_data):
+            try:
+                materia_prima = MateriaPrima.objects.get(codigo=mp_data['materia_prima_id'])
+                
                 TrazabilidadMateriaPrima.objects.create(
-                    trazabilidad=instance,
-                    materia_prima_id=mp_data['materia_prima_id'],
+                    trazabilidad=trazabilidad,
+                    materia_prima=materia_prima,
                     lote=mp_data.get('lote'),
-                    cantidad_usada=mp_data['cantidad_usada'],
+                    cantidad_usada=float(mp_data['cantidad_usada']),
                     unidad_medida=mp_data['unidad_medida']
                 )
+                print(f'  ✅ MP {i+1}: {materia_prima.nombre}')
+                
+            except MateriaPrima.DoesNotExist:
+                print(f'  ❌ MP {i+1}: No encontrada {mp_data.get("materia_prima_id")}')
+            except Exception as e:
+                print(f'  ❌ MP {i+1}: Error {e}')
         
-        # Actualizar reprocesos si se enviaron
-        if reprocesos_data is not None:
-            instance.reprocesos.all().delete()
-            for reproceso_data in reprocesos_data:
+        # Crear reprocesos
+        for i, reproceso_data in enumerate(reprocesos_data):
+            try:
                 Reproceso.objects.create(
-                    trazabilidad=instance,
-                    **reproceso_data
+                    trazabilidad=trazabilidad,
+                    cantidad_kg=float(reproceso_data['cantidad_kg']),
+                    descripcion=reproceso_data['descripcion']
                 )
+                print(f'  ✅ Reproceso {i+1}')
+            except Exception as e:
+                print(f'  ❌ Reproceso {i+1}: {e}')
         
-        # Actualizar mermas si se enviaron
-        if mermas_data is not None:
-            instance.mermas.all().delete()
-            for merma_data in mermas_data:
+        # Crear mermas
+        for i, merma_data in enumerate(mermas_data):
+            try:
                 Merma.objects.create(
-                    trazabilidad=instance,
-                    **merma_data
+                    trazabilidad=trazabilidad,
+                    cantidad_kg=float(merma_data['cantidad_kg']),
+                    descripcion=merma_data['descripcion']
                 )
+                print(f'  ✅ Merma {i+1}')
+            except Exception as e:
+                print(f'  ❌ Merma {i+1}: {e}')
+
+        # ========================================================================
+        # FINALIZAR LA TAREA AUTOMÁTICAMENTE
+        # ========================================================================
+        try:
+            tarea = trazabilidad.hoja_procesos.tarea
+            
+            if tarea.estado != 'finalizada':
+                print(f'\n📌 Finalizando tarea ID {tarea.id}...')
+                tarea.estado = 'finalizada'
+                tarea.fecha_finalizacion = trazabilidad.fecha_creacion
+                tarea.save()
+                print(f'✅ Tarea finalizada: {tarea.producto.nombre}')
+            else:
+                print(f'\nℹ️  Tarea ya estaba finalizada')
+                
+        except Exception as e:
+            print(f'\n⚠️  Error al finalizar tarea: {e}')
+            # No lanzar excepción, la trazabilidad ya se creó correctamente
         
-        return instance
-    
-    def to_representation(self, instance):
-        """Retorna la representación detallada"""
-        return TrazabilidadDetailSerializer(instance, context=self.context).data
+        print('='*70)
+        print('✅ TRAZABILIDAD CREADA EXITOSAMENTE')
+        print('='*70 + '\n')
+        
+        return trazabilidad

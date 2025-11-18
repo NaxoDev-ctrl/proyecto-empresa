@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mime/mime.dart';
+
+
 
 class ApiService {
   // IMPORTANTE: Cambia esta URL según tu configuración
@@ -77,6 +80,69 @@ class ApiService {
     } catch (e) {
       throw Exception('Error: $e');
     }
+  }
+  /// Detectar tipo MIME de imagen basado en los primeros bytes
+  MediaType _detectImageMediaType(List<int> imageBytes, String filename) {
+    // Intentar detectar por extensión primero
+    final mimeType = lookupMimeType(filename, headerBytes: imageBytes);
+    
+    if (mimeType != null) {
+      final parts = mimeType.split('/');
+      if (parts.length == 2 && parts[0] == 'image') {
+        print('Tipo MIME detectado: $mimeType');
+        return MediaType(parts[0], parts[1]);
+      }
+    }
+    
+    // Fallback: detectar por "magic numbers" (primeros bytes)
+    if (imageBytes.length >= 2) {
+      // JPEG: FF D8 FF
+      if (imageBytes[0] == 0xFF && imageBytes[1] == 0xD8) {
+        print('Detectado JPEG por magic number');
+        return MediaType('image', 'jpeg');
+      }
+      
+      // PNG: 89 50 4E 47
+      if (imageBytes.length >= 4 &&
+          imageBytes[0] == 0x89 &&
+          imageBytes[1] == 0x50 &&
+          imageBytes[2] == 0x4E &&
+          imageBytes[3] == 0x47) {
+        print('Detectado PNG por magic number');
+        return MediaType('image', 'png');
+      }
+      
+      // GIF: 47 49 46
+      if (imageBytes.length >= 3 &&
+          imageBytes[0] == 0x47 &&
+          imageBytes[1] == 0x49 &&
+          imageBytes[2] == 0x46) {
+        print('Detectado GIF por magic number');
+        return MediaType('image', 'gif');
+      }
+      
+      // WEBP: 52 49 46 46 ... 57 45 42 50
+      if (imageBytes.length >= 12 &&
+          imageBytes[0] == 0x52 &&
+          imageBytes[1] == 0x49 &&
+          imageBytes[8] == 0x57 &&
+          imageBytes[9] == 0x45 &&
+          imageBytes[10] == 0x42 &&
+          imageBytes[11] == 0x50) {
+        print('Detectado WEBP por magic number');
+        return MediaType('image', 'webp');
+      }
+      
+      // BMP: 42 4D
+      if (imageBytes[0] == 0x42 && imageBytes[1] == 0x4D) {
+        print('Detectado BMP por magic number');
+        return MediaType('image', 'bmp');
+      }
+    }
+    
+    // Default: asumir JPEG
+    print('Tipo no detectado, usando JPEG por defecto');
+    return MediaType('image', 'jpeg');
   }
 
   // ========================================================================
@@ -707,7 +773,7 @@ class ApiService {
   // TRAZABILIDAD
   // ========================================================================
 
-  /// Crear trazabilidad
+  /// Crear trazabilidad CON foto de etiquetas (cualquier formato)
   Future<Map<String, dynamic>> crearTrazabilidad({
     required int hojaProcesosId,
     required int cantidadProducida,
@@ -715,20 +781,51 @@ class ApiService {
     List<Map<String, dynamic>>? reprocesos,
     List<Map<String, dynamic>>? mermas,
     String? observaciones,
+    List<int>? fotoEtiquetas,
+    String? nombreArchivoFoto,  // <-- AGREGAR para detectar extensión
   }) async {
     try {
-      final response = await http.post(
+      var request = http.MultipartRequest(
+        'POST',
         Uri.parse('$baseUrl/trazabilidades/'),
-        headers: _getHeaders(),
-        body: json.encode({
-          'hoja_procesos': hojaProcesosId,
-          'cantidad_producida': cantidadProducida,
-          'materias_primas': materiasPrimas,
-          'reprocesos_data': reprocesos ?? [],
-          'mermas_data': mermas ?? [],
-          'observaciones': observaciones,
-        }),
       );
+
+      request.headers['Accept'] = 'application/json';
+
+      // Agregar campos
+      request.fields['hoja_procesos'] = hojaProcesosId.toString();
+      request.fields['cantidad_producida'] = cantidadProducida.toString();
+      request.fields['materias_primas'] = json.encode(materiasPrimas);
+      
+      if (reprocesos != null && reprocesos.isNotEmpty) {
+        request.fields['reprocesos_data'] = json.encode(reprocesos);
+      }
+      
+      if (mermas != null && mermas.isNotEmpty) {
+        request.fields['mermas_data'] = json.encode(mermas);
+      }
+      
+      if (observaciones != null && observaciones.isNotEmpty) {
+        request.fields['observaciones'] = observaciones;
+      }
+
+      // Agregar foto con detección automática de tipo
+      if (fotoEtiquetas != null && fotoEtiquetas.isNotEmpty) {
+        final filename = nombreArchivoFoto ?? 'etiqueta_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final mediaType = _detectImageMediaType(fotoEtiquetas, filename);
+        
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'foto_etiquetas',
+            fotoEtiquetas,
+            filename: filename,
+            contentType: mediaType,  // <-- Tipo detectado automáticamente
+          ),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
@@ -778,39 +875,6 @@ class ApiService {
       } else {
         _handleError(response);
         throw Exception('Error al obtener trazabilidad');
-      }
-    } catch (e) {
-      throw Exception('Error de conexión: $e');
-    }
-  }
-
-  /// Subir foto de etiqueta
-  Future<Map<String, dynamic>> subirFotoEtiqueta(int trazabilidadId, List<int> imageBytes) async {
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/subir_foto_etiqueta/'),
-      );
-
-
-      // Agregar archivo
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'foto',
-          imageBytes,
-          filename: 'etiqueta_${DateTime.now().millisecondsSinceEpoch}.jpg',
-          contentType: MediaType('image', 'jpeg'),
-        ),
-      );
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        return json.decode(utf8.decode(response.bodyBytes));
-      } else {
-        _handleError(response);
-        throw Exception('Error al subir foto');
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');

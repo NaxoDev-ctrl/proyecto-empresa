@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
 import 'providers/filtro_provider.dart';
-import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'screens/seleccion_linea_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); 
@@ -26,61 +24,40 @@ class MyApp extends StatelessWidget {
           title: 'Chocolatería Entrelagos',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.brown,
-              brightness: Brightness.light,
-            ),
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
             useMaterial3: true,
-            appBarTheme: const AppBarTheme(
+            appBarTheme: AppBarTheme(
               centerTitle: true,
               elevation: 0,
+              backgroundColor: Colors.blue.shade700,
+              foregroundColor: Colors.white,
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            cardTheme: CardThemeData(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             inputDecorationTheme: InputDecorationTheme(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               filled: true,
+              fillColor: Colors.grey.shade50,
             ),
           ),
-          home: const AuthWrapper(),
+          home: const HomeScreen(),
         ),
       ),
     );
   }
 }
 
-/// Widget que decide qué pantalla mostrar según el estado de autenticación
-class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<AuthService>(
-      builder: (context, authService, _) {
-        // Mientras carga, mostrar splash
-        if (authService.isLoading) {
-          return const Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Cargando...'),
-                ],
-              ),
-            ),
-          );
-        }
-
-        // Si está autenticado, ir a home
-        if (authService.isAuthenticated) {
-          return const SeleccionLineaScreen();
-        }
-
-        // Si no está autenticado, mostrar login
-        return const SeleccionLineaScreen();
-      },
-    );
-  }
-}

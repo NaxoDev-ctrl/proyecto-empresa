@@ -18,7 +18,7 @@ from .models import (
     Maquina, TipoEvento,
     HojaProcesos, EventoProceso, EventoMaquina,
     Trazabilidad, TrazabilidadMateriaPrima,
-    Reproceso, Merma, FotoEtiqueta, FirmaTrazabilidad
+    Reproceso, Merma, FirmaTrazabilidad
 )
 from .serializers import (
     UsuarioSerializer, LineaSerializer, TurnoSerializer,
@@ -633,8 +633,7 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
             'materias_primas_usadas__materia_prima',
             'reprocesos',
             'mermas',
-            'firmas__usuario',
-            'foto_etiqueta'
+            'firmas__usuario'
         )
         
         # Filtros opcionales
@@ -733,44 +732,64 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
-    
-    @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
-    def subir_foto_etiqueta(self, request, pk=None):
-        """
-        Endpoint: POST /api/trazabilidades/{id}/subir_foto_etiqueta/
-        Sube la foto de etiquetas para una trazabilidad.
-        Body: form-data con campo 'foto'
-        """
-        trazabilidad = self.get_object()
         
-        if 'foto' not in request.FILES:
-            return Response(
-                {'error': 'No se envió ninguna foto'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    def create(self, request, *args, **kwargs):
+        """Override create para agregar logging detallado"""
         
-        foto = request.FILES['foto']
+        print('\n' + '='*70)
+        print('RECIBIENDO REQUEST PARA CREAR TRAZABILIDAD')
+        print('='*70)
+        print(f'Content-Type: {request.content_type}')
+        print(f'Method: {request.method}')
         
-        # Validar que sea una imagen
-        if not foto.content_type.startswith('image/'):
-            return Response(
-                {'error': 'El archivo debe ser una imagen'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        print('\n📦 DATA recibido:')
+        for key, value in request.data.items():
+            if key == 'foto_etiquetas':
+                print(f'  {key}: <IMAGE FILE>')
+            elif isinstance(value, str) and len(value) > 100:
+                print(f'  {key}: {value[:100]}...')
+            else:
+                print(f'  {key}: {value}')
         
-        # Crear o actualizar foto de etiqueta
-        foto_etiqueta, created = FotoEtiqueta.objects.update_or_create(
-            trazabilidad=trazabilidad,
-            defaults={'foto': foto}
+        print('\n📁 FILES recibidos:')
+        for key, file in request.FILES.items():
+            print(f'  {key}: {file.name} ({file.size} bytes, {file.content_type})')
+        
+        # Intentar serializar
+        serializer = self.get_serializer(data=request.data)
+        
+        print('\n🔍 Validando datos...')
+        try:
+            serializer.is_valid(raise_exception=True)
+            print('✅ Datos válidos')
+        except Exception as e:
+            print(f'\n❌ ERROR DE VALIDACIÓN:')
+            print(f'Tipo: {type(e).__name__}')
+            print(f'Mensaje: {str(e)}')
+            
+            if hasattr(e, 'detail'):
+                print(f'Detalle: {e.detail}')
+            
+            import traceback
+            traceback.print_exc()
+            
+            # Re-raise para que DRF maneje la respuesta
+            raise
+        
+        # Si llegamos aquí, crear el objeto
+        print('\n💾 Guardando...')
+        self.perform_create(serializer)
+        
+        headers = self.get_success_headers(serializer.data)
+        
+        print('\n✅ TRAZABILIDAD CREADA EXITOSAMENTE')
+        print('='*70 + '\n')
+        
+        return Response(
+            serializer.data, 
+            status=status.HTTP_201_CREATED, 
+            headers=headers
         )
-        
-        serializer = TrazabilidadDetailSerializer(trazabilidad)
-        return Response({
-            'success': True,
-            'message': 'Foto de etiqueta subida correctamente',
-            'trazabilidad': serializer.data
-        })
-
 
 # ============================================================================
 # VIEWSET: Firmas de Trazabilidad

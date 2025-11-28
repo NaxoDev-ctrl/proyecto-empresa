@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontprod/services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import 'crear_tarea_screen.dart';
@@ -13,6 +14,7 @@ class SupervisorDashboard extends StatefulWidget {
 }
 
 class _SupervisorDashboardState extends State<SupervisorDashboard> {
+  final ApiService _apiService = ApiService();
   int _selectedIndex = 0;
   int _refreshKey = 0; // Key para forzar rebuild de la lista
 
@@ -73,29 +75,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar sesión',
-            onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Cerrar Sesión'),
-                  content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancelar'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Cerrar Sesión'),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirm == true && mounted) {
-                await authService.logout();
-              }
-            },
+            onPressed: _cerrarSesion,
           ),
         ],
       ),
@@ -142,5 +122,39 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
             )
           : null,
     );
+  }
+
+  /// Cerrar sesión con confirmación
+  Future<void> _cerrarSesion() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cerrar Sesión'),
+        content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Cerrar Sesión'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true && mounted) {
+      // Cerrar sesión (eliminar token)
+      await _apiService.logout();
+      
+      if (!mounted) return;
+      
+      // Volver al HomeScreen
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 }

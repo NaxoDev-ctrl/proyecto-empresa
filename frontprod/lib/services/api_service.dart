@@ -185,11 +185,11 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/usuarios/me/'),
-        headers: _getHeaders(),
+        headers: _getHeaders(needsAuth: true),
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return json.decode(utf8.decode(response.bodyBytes));
       } else {
         _handleError(response);
         throw Exception('Error al obtener usuario');
@@ -933,4 +933,17 @@ class ApiService {
       throw Exception('Error de conexión: $e');
     }
   }
+  
+  /// Eliminar token
+  Future<void> _clearToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
+    _token = null;
+  }
+
+  /// Cerrar sesión (eliminar token guardado)
+  Future<void> logout() async {
+    await _clearToken();
+  }
+
 }

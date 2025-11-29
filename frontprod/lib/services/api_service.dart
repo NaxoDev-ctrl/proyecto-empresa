@@ -778,11 +778,12 @@ class ApiService {
     required int hojaProcesosId,
     required int cantidadProducida,
     required List<Map<String, dynamic>> materiasPrimas,
+    required List<int> colaboradoresCodigos,
     List<Map<String, dynamic>>? reprocesos,
     List<Map<String, dynamic>>? mermas,
     String? observaciones,
     List<int>? fotoEtiquetas,
-    String? nombreArchivoFoto,  // <-- AGREGAR para detectar extensión
+    String? nombreArchivoFoto,
   }) async {
     try {
       var request = http.MultipartRequest(
@@ -796,6 +797,7 @@ class ApiService {
       request.fields['hoja_procesos'] = hojaProcesosId.toString();
       request.fields['cantidad_producida'] = cantidadProducida.toString();
       request.fields['materias_primas'] = json.encode(materiasPrimas);
+      request.fields['colaboradores_codigos'] = json.encode(colaboradoresCodigos);
       
       if (reprocesos != null && reprocesos.isNotEmpty) {
         request.fields['reprocesos_data'] = json.encode(reprocesos);
@@ -819,7 +821,7 @@ class ApiService {
             'foto_etiquetas',
             fotoEtiquetas,
             filename: filename,
-            contentType: mediaType,  // <-- Tipo detectado automáticamente
+            contentType: mediaType, 
           ),
         );
       }
@@ -933,7 +935,7 @@ class ApiService {
       throw Exception('Error de conexión: $e');
     }
   }
-  
+
   /// Eliminar token
   Future<void> _clearToken() async {
     final prefs = await SharedPreferences.getInstance();

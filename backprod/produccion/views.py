@@ -98,7 +98,7 @@ class ColaboradorViewSet(viewsets.ModelViewSet):
     Permite listar, crear, actualizar y eliminar colaboradores.
     """
     serializer_class = ColaboradorSerializer
-    permission_classes = [IsAuthenticated, IsSupervisorOrReadOnly]
+    permission_classes = [AllowAnyAccess]
     queryset = Colaborador.objects.filter(activo=True).order_by('codigo')
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['codigo', 'nombre', 'apellido']

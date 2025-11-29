@@ -5,7 +5,7 @@ from .models import (
     Tarea, TareaColaborador, Maquina, TipoEvento,
     HojaProcesos, EventoProceso, EventoMaquina,
     Trazabilidad, TrazabilidadMateriaPrima,
-    Reproceso, Merma, FotoEtiqueta, FirmaTrazabilidad
+    Reproceso, Merma, FotoEtiqueta, FirmaTrazabilidad, TrazabilidadColaborador
 )
 from django.core.exceptions import ValidationError as DjangoValidationError
 import json
@@ -872,6 +872,30 @@ class JSONStringField(serializers.Field):
     def to_representation(self, value):
         """Convierte objeto Python a JSON para respuesta"""
         return value
+    
+# ============================================================================
+# SERIALIZER: TrazabilidadColaborador
+# ============================================================================
+class TrazabilidadColaboradorSerializer(serializers.ModelSerializer):
+    colaborador_codigo = serializers.IntegerField(
+        source='colaborador.codigo',
+        read_only=True
+    )
+    colaborador_nombre_completo = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = TrazabilidadColaborador
+        fields = [
+            'id',
+            'colaborador',
+            'colaborador_codigo',
+            'colaborador_nombre_completo',
+            'fecha_asignacion',
+        ]
+        read_only_fields = ['id', 'fecha_asignacion']
+    
+    def get_colaborador_nombre_completo(self, obj):
+        return f"{obj.colaborador.nombre} {obj.colaborador.apellido}"
 
 # ============================================================================
 # SERIALIZER: Trazabilidad (Crear/Actualizar)
@@ -887,6 +911,16 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
     reprocesos_data = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     mermas_data = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     foto_etiquetas = serializers.ImageField(required=False, allow_null=True)
+    # NUEVO: Colaboradores que trabajaron realmente
+    colaboradores_reales = TrazabilidadColaboradorSerializer(
+        many=True,
+        read_only=True
+    )
+    colaboradores_codigos = serializers.JSONField(
+        write_only=True,
+        required=True,
+        help_text='Lista de códigos de colaboradores que trabajaron'
+    )
     
     class Meta:
         model = Trazabilidad
@@ -901,6 +935,8 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
             'materias_primas',
             'reprocesos_data',
             'mermas_data',
+            'colaboradores_reales',  
+            'colaboradores_codigos',
         ]
         read_only_fields = ['id', 'estado']
     
@@ -1008,6 +1044,56 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         print('='*70 + '\n')
         return attrs
     
+    def validate_colaboradores_codigos(self, value):
+        """Validar códigos de colaboradores"""
+        
+        # Si llega como string JSON, parsearlo
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                raise serializers.ValidationError(
+                    "Formato JSON inválido para colaboradores_codigos"
+                )
+        
+        # Verificar que sea una lista
+        if not isinstance(value, list):
+            raise serializers.ValidationError(
+                "colaboradores_codigos debe ser una lista"
+            )
+        
+        # Verificar que no esté vacía
+        if len(value) == 0:
+            raise serializers.ValidationError(
+                "Debe haber al menos un colaborador"
+            )
+        
+        # Convertir a enteros
+        codigos_int = []
+        for codigo in value:
+            try:
+                codigo_int = int(codigo)
+                codigos_int.append(codigo_int)
+            except (ValueError, TypeError):
+                raise serializers.ValidationError(
+                    f"Código de colaborador inválido: {codigo}"
+                )
+        
+        # Verificar que existan en BD
+        colaboradores_existentes = Colaborador.objects.filter(
+            codigo__in=codigos_int
+        ).count()
+        
+        if colaboradores_existentes != len(codigos_int):
+            codigos_faltantes = set(codigos_int) - set(
+                Colaborador.objects.filter(codigo__in=codigos_int).values_list('codigo', flat=True)
+            )
+            raise serializers.ValidationError(
+                f"Colaboradores no encontrados: {codigos_faltantes}"
+            )
+        
+        return codigos_int
+    
     def create(self, validated_data):
         """Crear trazabilidad con sus relaciones"""
         
@@ -1019,6 +1105,7 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         materias_primas_data = validated_data.pop('materias_primas', []) or []
         reprocesos_data = validated_data.pop('reprocesos_data', []) or []
         mermas_data = validated_data.pop('mermas_data', []) or []
+        colaboradores_codigos = validated_data.pop('colaboradores_codigos')
         
         print(f'Hoja Procesos: {validated_data.get("hoja_procesos")}')
         print(f'Cantidad: {validated_data.get("cantidad_producida")}')
@@ -1073,6 +1160,14 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
                 print(f'  ✅ Merma {i+1}')
             except Exception as e:
                 print(f'  ❌ Merma {i+1}: {e}')
+
+        # Crear colaboradores
+        for colaborador_codigo in colaboradores_codigos:
+            colaborador = Colaborador.objects.get(codigo=colaborador_codigo)
+            TrazabilidadColaborador.objects.create(
+                trazabilidad=trazabilidad,
+                colaborador=colaborador
+            )
 
         # ========================================================================
         # FINALIZAR LA TAREA AUTOMÁTICAMENTE

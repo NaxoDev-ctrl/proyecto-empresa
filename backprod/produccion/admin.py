@@ -9,7 +9,7 @@ from .models import (
     Tarea, TareaColaborador, Maquina, TipoEvento,
     HojaProcesos, EventoProceso, EventoMaquina,
     Trazabilidad, TrazabilidadMateriaPrima,
-    Reproceso, Merma, FirmaTrazabilidad
+    Reproceso, Merma, FirmaTrazabilidad, TrazabilidadColaborador
 )
 
 
@@ -505,6 +505,27 @@ class FirmaTrazabilidadInline(admin.TabularInline):
 
 
 # ============================================================================
+# Inline para mostrar colaboradores dentro de Trazabilidad
+# ============================================================================
+class TrazabilidadColaboradorInline(admin.TabularInline):
+    """
+    Muestra los colaboradores dentro del formulario de Trazabilidad
+    """
+    model = TrazabilidadColaborador
+    extra = 1  # Líneas vacías para agregar nuevos
+    autocomplete_fields = ['colaborador']  # Búsqueda inteligente
+    fields = ['colaborador', 'fecha_asignacion']
+    readonly_fields = ['fecha_asignacion']
+
+    verbose_name = 'Colaborador que trabajó'
+    verbose_name_plural = '👥 Colaboradores que REALMENTE trabajaron'
+
+    def get_queryset(self, request):
+        """Optimizar query"""
+        qs = super().get_queryset(request)
+        return qs.select_related('colaborador')
+
+# ============================================================================
 # ADMIN: Trazabilidad
 # ============================================================================
 @admin.register(Trazabilidad)
@@ -514,8 +535,10 @@ class TrazabilidadAdmin(admin.ModelAdmin):
     """
     
     list_display = [
+        'id',
         'hoja_procesos', 
         'cantidad_producida', 
+        'get_colaboradores_reales',
         'estado_badge', 
         'fecha_creacion',
         'tiene_firmas'
@@ -544,11 +567,32 @@ class TrazabilidadAdmin(admin.ModelAdmin):
     readonly_fields = ['fecha_creacion']
     inlines = [
         TrazabilidadMateriaPrimaInline,
+        TrazabilidadColaboradorInline,
         ReprocesoInline,
         MermaInline,
         FirmaTrazabilidadInline
     ]
     
+
+    def get_colaboradores_reales(self, obj):
+        """Mostrar colaboradores que trabajaron"""
+        count = obj.colaboradores_reales.count()
+        
+        if count == 0:
+            return "⚠️ Ninguno"
+        
+        # Obtener primeros 3 colaboradores
+        colaboradores = obj.colaboradores_reales.select_related('colaborador')[:3]
+        nombres = [str(tc.colaborador.codigo) for tc in colaboradores]
+        result = ", ".join(nombres)
+        
+        if count > 3:
+            result += f" (+{count - 3} más)"
+        
+        return f"✓ {count} → {result}"
+    
+    get_colaboradores_reales.short_description = '👥 Colaboradores'
+
     def estado_badge(self, obj):
         """Muestra el estado con color"""
         colors = {
@@ -580,6 +624,13 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         return ', '.join(icons) if icons else '❌ Sin firmas'
     
     tiene_firmas.short_description = 'Firmas'
+
+    # Método para mostrar cantidad de colaboradores
+    def get_colaboradores_count(self, obj):
+        count = obj.colaboradores_reales.count()
+        return f"{count} colaborador{'es' if count != 1 else ''}"
+    
+    get_colaboradores_count.short_description = 'Colaboradores'
 
 
 # ============================================================================

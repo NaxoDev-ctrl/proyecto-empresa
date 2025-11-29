@@ -147,8 +147,7 @@ class Colaborador(models.Model):
     Se cargan desde un archivo Excel por el supervisor.
     """
     
-    codigo = models.CharField(
-        max_length=20,
+    codigo = models.IntegerField(
         unique=True,
         help_text="Código identificador del colaborador"
     )
@@ -928,6 +927,16 @@ class Reproceso(models.Model):
     """
     Registra los reprocesos ocurridos durante la producción.
     """
+    CAUSAS_CHOICES = [
+        ('temperatura_inadecuada', 'Temperatura Inadecuada'),
+        ('tiempo_excedido', 'Tiempo de Proceso Excedido'),
+        ('mezcla_incorrecta', 'Mezcla Incorrecta'),
+        ('contaminacion', 'Contaminación'),
+        ('error_operador', 'Error del Operador'),
+        ('falla_maquina', 'Falla de Máquina'),
+        ('materia_prima_defectuosa', 'Materia Prima Defectuosa'),
+        ('otro', 'Otro (especificar)'),
+    ]
     
     trazabilidad = models.ForeignKey(
         Trazabilidad,
@@ -941,6 +950,9 @@ class Reproceso(models.Model):
         decimal_places=2,
         help_text="Cantidad de reproceso en kilogramos"
     )
+
+    causas = models.CharField(max_length=500, choices=CAUSAS_CHOICES, null=True)
+    observaciones = models.TextField(blank=True, null=True)
     
     descripcion = models.TextField(
         max_length=500,
@@ -964,6 +976,16 @@ class Merma(models.Model):
     """
     Registra las mermas ocurridas durante la producción.
     """
+    CAUSAS_CHOICES = [
+        ('desperdicio_corte', 'Desperdicio en Corte'),
+        ('producto_defectuoso', 'Producto Defectuoso'),
+        ('derrame', 'Derrame o Pérdida'),
+        ('caducidad', 'Producto Caducado'),
+        ('error_pesaje', 'Error en Pesaje'),
+        ('adherencia_equipo', 'Adherencia a Equipo'),
+        ('rechazo_calidad', 'Rechazo de Calidad'),
+        ('otro', 'Otro (especificar)'),
+    ]
     
     trazabilidad = models.ForeignKey(
         Trazabilidad,
@@ -982,6 +1004,9 @@ class Merma(models.Model):
         max_length=500,
         help_text="Descripción de la merma"
     )
+
+    causas = models.CharField(max_length=500, choices=CAUSAS_CHOICES, null=True)
+    observaciones = models.TextField(blank=True, null=True)
     
     class Meta:
         db_table = 'mermas'
@@ -1088,4 +1113,42 @@ class FirmaTrazabilidad(models.Model):
             raise ValidationError({
                 'usuario': 'El usuario debe tener rol de control de calidad para firmar como control de calidad'
             })
+        
+# ============================================================================
+# MODELO: TrazabilidadColaborador
+# ============================================================================
 
+class TrazabilidadColaborador(models.Model):
+    """
+    Registra los colaboradores que REALMENTE trabajaron en la producción.
+    
+    Puede diferir de los colaboradores asignados originalmente en la Tarea,
+    ya que operativamente pueden cambiar (ausencias, reemplazos, etc.)
+    """
+    trazabilidad = models.ForeignKey(
+        'Trazabilidad',
+        on_delete=models.CASCADE,
+        related_name='colaboradores_reales',
+        help_text='Trazabilidad a la que pertenece'
+    )
+    
+    colaborador = models.ForeignKey(
+        'Colaborador',
+        on_delete=models.PROTECT,  # No permitir eliminar colaborador si está en trazabilidad
+        help_text='Colaborador que trabajó en la producción'
+    )
+    
+    fecha_asignacion = models.DateTimeField(
+        auto_now_add=True,
+        help_text='Cuándo se registró este colaborador en la trazabilidad'
+    )
+    
+    class Meta:
+        db_table = 'trazabilidad_colaborador'
+        verbose_name = 'Colaborador en Trazabilidad'
+        verbose_name_plural = 'Colaboradores en Trazabilidad'
+        unique_together = ['trazabilidad', 'colaborador']  # No duplicar colaborador en misma trazabilidad
+        ordering = ['fecha_asignacion']
+    
+    def __str__(self):
+        return f"{self.colaborador.nombre} - Trazabilidad #{self.trazabilidad.id}"

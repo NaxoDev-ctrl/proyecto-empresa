@@ -29,6 +29,11 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   // Datos de la tarea
   Map<String, dynamic>? _tarea;
   List<dynamic> _materiasPrimas = [];
+
+  // Gestión de colaboradores
+  List<Map<String, dynamic>> _colaboradoresOriginales = [];
+  List<Map<String, dynamic>> _colaboradoresSeleccionados = [];
+  List<Map<String, dynamic>> _todosColaboradores = [];
   
   // Datos del formulario
   Map<int, Map<String, dynamic>> _lotesMP = {}; // {materiaprima_id: {lote, cantidad, unidad}}
@@ -63,11 +68,52 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     try {
       // Cargar tarea con producto y receta
       final tareaData = await _apiService.getTareaDetalle(widget.tareaId);
+
+      final todosColabs = await _apiService.getColaboradores();
       
       setState(() {
         _tarea = tareaData;
         _materiasPrimas = tareaData['producto_detalle']['materias_primas'] ?? [];
-        
+
+        final colaboradoresAsignados = tareaData['colaboradores_asignados'] 
+          ?? tareaData['colaboradores']
+          ?? tareaData['asignados']
+          ?? [];
+
+        // Inicializar colaboradores
+        _colaboradoresOriginales = List<Map<String, dynamic>>.from(
+          colaboradoresAsignados.map((c) {
+            // Extraer codigo y garantizar que sea int
+            final codigo = c['codigo'];
+            final codigoInt = codigo is int ? codigo : int.parse(codigo.toString());
+            
+            print('   📝 Procesando: ${c['nombre']} ${c['apellido']} (codigo: $codigoInt, tipo: ${codigoInt.runtimeType})');
+            
+            return {
+              'codigo': codigoInt,
+              'nombre': c['nombre'],
+              'apellido': c['apellido'],
+            };
+          })
+        );
+
+        // Prellenar con los colaboradores originales
+        _colaboradoresSeleccionados = List<Map<String, dynamic>>.from(_colaboradoresOriginales);
+      
+        // Guardar todos los colaboradores disponibles
+        _todosColaboradores = List<Map<String, dynamic>>.from(
+          todosColabs.map((c) {
+            final codigo = c['codigo'];
+            final codigoInt = codigo is int ? codigo : int.parse(codigo.toString());
+            
+            return {
+              'codigo': codigoInt,
+              'nombre': c['nombre'],
+              'apellido': c['apellido'],
+            };
+          })
+        );
+            
         // Inicializar mapa de lotes
         for (var mp in _materiasPrimas) {
           _lotesMP[mp['codigo'].hashCode] = {
@@ -76,6 +122,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             'cantidad_usada': '',
             'unidad_medida': 'kg',
             'requiere_lote': mp['requiere_lote'],
+            'nombre': mp['nombre'],
           };
         }
         
@@ -86,6 +133,127 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+  
+  // ========================================================================
+  // NUEVOS MÉTODOS: Gestión de colaboradores
+  // ========================================================================
+
+  void _eliminarColaborador(int index) {
+    final colab = _colaboradoresSeleccionados[index];
+    final nombreCompleto = '${colab['nombre']} ${colab['apellido']}';
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Eliminar Colaborador'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('¿Estás seguro de eliminar a este colaborador?'),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.person, color: Colors.grey[700]),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          nombreCompleto,
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Código: ${colab['codigo']}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _colaboradoresSeleccionados.removeAt(index);
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Colaborador eliminado'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Future<void> _agregarColaborador() async {
+    // Filtrar colaboradores que ya están seleccionados
+    final colaboradoresDisponibles = _todosColaboradores.where((colab) {
+      return !_colaboradoresSeleccionados.any(
+        (sel) => sel['codigo'] == colab['codigo']
+      );
+    }).toList();
+    
+    if (colaboradoresDisponibles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No hay más colaboradores disponibles'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    final colaboradorSeleccionado = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _DialogSeleccionarColaborador(
+        colaboradores: colaboradoresDisponibles,
+      ),
+    );
+    
+    if (colaboradorSeleccionado != null) {
+      setState(() {
+        _colaboradoresSeleccionados.add(colaboradorSeleccionado);
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Colaborador ${colaboradorSeleccionado['nombre']} ${colaboradorSeleccionado['apellido']} agregado'
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
     }
   }
 
@@ -170,36 +338,404 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
       return;
     }
 
-    if (_fotoEtiqueta == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Debes tomar una foto de las etiquetas'),
-          backgroundColor: Colors.orange,
+    // ========================================================================
+    // VALIDACIÓN: Verificar que haya al menos un colaborador
+    // ========================================================================
+    if (_colaboradoresSeleccionados.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 32),
+              SizedBox(width: 12),
+              Text('Sin Colaboradores'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Debe haber al menos un colaborador asignado a la trazabilidad.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.people, color: Colors.red),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Agrega al menos un colaborador que haya trabajado en esta producción',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _agregarColaborador();
+              },
+              icon: Icon(Icons.person_add),
+              label: Text('Agregar Colaborador'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+            ),
+          ],
         ),
       );
       return;
     }
 
-    // Confirmar
+    // ========================================================================
+    // VALIDACIÓN: Verificar que todas las materias primas tengan cantidad
+    // ========================================================================
+    int mpSinCantidad = 0;
+    int mpSinLote = 0;
+    String? primeraMPSinCantidad;
+    String? primeraMPSinLote;
+
+    for (var entry in _lotesMP.entries) {
+      final mp = entry.value;
+      final nombreMP = mp['nombre'] ?? mp['materia_prima_id'];
+
+      // Verificar cantidad
+      if (mp['cantidad_usada'].toString().isEmpty || 
+          mp['cantidad_usada'].toString() == '0' ||
+          mp['cantidad_usada'].toString() == '0.0') {
+        mpSinCantidad++;
+        if (primeraMPSinCantidad == null) {
+          primeraMPSinCantidad = nombreMP;
+        }
+      }
+
+      // Verificar lote si lo requiere
+      if (mp['requiere_lote'] == true && 
+          (mp['lote'] == null || mp['lote'].toString().trim().isEmpty)) {
+        mpSinLote++;
+        if (primeraMPSinLote == null) {
+          primeraMPSinLote = nombreMP;
+        }
+      }
+    }
+
+    // Mostrar error si faltan cantidades
+    if (mpSinCantidad > 0) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 32),
+              SizedBox(width: 12),
+              Expanded(child: Text('Faltan Cantidades')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Debes ingresar la cantidad usada de TODAS las materias primas.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.warning, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Materias primas sin cantidad: $mpSinCantidad',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (primeraMPSinCantidad != null) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'Ejemplo: $primeraMPSinCantidad',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '⚠️ No se puede continuar sin completar todas las cantidades.',
+                style: TextStyle(
+                  fontSize: 14, 
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              child: Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Mostrar error si faltan lotes
+    if (mpSinLote > 0) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.warning, color: Colors.orange, size: 32),
+              SizedBox(width: 12),
+              Expanded(child: Text('Faltan Lotes')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Algunas materias primas requieren lote OBLIGATORIAMENTE.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.inventory_2, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Materias primas sin lote: $mpSinLote',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (primeraMPSinLote != null) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'Ejemplo: $primeraMPSinLote',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Busca el lote en el empaque de la materia prima.',
+                style: TextStyle(
+                  fontSize: 14, 
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+              ),
+              child: Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // ========================================================================
+    // VALIDACIÓN: Verificar foto
+    // ========================================================================
+    if (_fotoEtiqueta == null) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.camera_alt, color: Colors.blue, size: 32),
+              SizedBox(width: 12),
+              Text('Falta Foto'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Debes tomar una foto de las etiquetas utilizadas en la producción.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'La foto es obligatoria para la trazabilidad',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancelar'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _tomarFoto();
+              },
+              icon: Icon(Icons.camera_alt),
+              label: Text('Tomar Foto Ahora'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // ========================================================================
+    // CONFIRMACIÓN FINAL CON RESUMEN
+    // ========================================================================
+    int mpConDatos = 0;
+    _lotesMP.forEach((key, value) {
+      if (value['cantidad_usada'].toString().isNotEmpty && 
+          value['cantidad_usada'].toString() != '0' &&
+          value['cantidad_usada'].toString() != '0.0') {
+        mpConDatos++;
+      }
+    });
+
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Confirmar Trazabilidad'),
-        content: Text(
-          '¿Estás seguro de guardar la trazabilidad?\n\n'
-          'Cantidad: ${_cantidadProducidaController.text} unidades\n'
-          'Materias primas: ${_lotesMP.length}\n'
-          'Reprocesos: ${_reprocesos.length}\n'
-          'Mermas: ${_mermas.length}',
+        title: Text('✅ Confirmar Trazabilidad'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '¿Estás seguro de guardar la trazabilidad?',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 20),
+            _buildResumenItem(
+              Icons.production_quantity_limits,
+              'Cantidad producida',
+              '${_cantidadProducidaController.text} unidades',
+              Colors.green,
+            ),
+            Divider(),
+            _buildResumenItem(
+              Icons.people,
+              'Colaboradores',
+              '${_colaboradoresSeleccionados.length}',
+              Colors.indigo,
+            ),
+            Divider(),
+            _buildResumenItem(
+              Icons.inventory_2,
+              'Materias primas',
+              '$mpConDatos registradas',
+              Colors.blue,
+            ),
+            if (_reprocesos.isNotEmpty) ...[
+              Divider(),
+              _buildResumenItem(
+                Icons.replay,
+                'Reprocesos',
+                '${_reprocesos.length}',
+                Colors.orange,
+              ),
+            ],
+            if (_mermas.isNotEmpty) ...[
+              Divider(),
+              _buildResumenItem(
+                Icons.delete_outline,
+                'Mermas',
+                '${_mermas.length}',
+                Colors.red,
+              ),
+            ],
+            Divider(),
+            _buildResumenItem(
+              Icons.photo_camera,
+              'Foto de etiquetas',
+              'Adjuntada ✓',
+              Colors.purple,
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text('Cancelar'),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Confirmar'),
+            icon: Icon(Icons.check_circle),
+            label: Text('Confirmar y Guardar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+            ),
           ),
         ],
       ),
@@ -226,11 +762,30 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         }
       });
 
+      // Preparar IDs de colaboradores
+      List<int> colaboradoresCodigos = [];
+
+      for (var colab in _colaboradoresSeleccionados) {
+        final codigo = colab['codigo'];
+        int codigoInt;
+        
+        if (codigo is int) {
+          codigoInt = codigo;
+        } else if (codigo is String) {
+          codigoInt = int.parse(codigo);
+        } else {
+          throw Exception('Código de colaborador inválido: $codigo (tipo: ${codigo.runtimeType})');
+        }
+        
+        colaboradoresCodigos.add(codigoInt);
+      }
+
       // Crear trazabilidad
       final trazabilidadData = await _apiService.crearTrazabilidad(
         hojaProcesosId: widget.hojaProcesosId,
         cantidadProducida: int.parse(_cantidadProducidaController.text),
         materiasPrimas: materiasPrimasData,
+        colaboradoresCodigos: colaboradoresCodigos,
         reprocesos: _reprocesos.isNotEmpty ? _reprocesos : null,
         mermas: _mermas.isNotEmpty ? _mermas : null,
         observaciones: _observacionesController.text.isEmpty 
@@ -286,6 +841,40 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         });
       }
     }
+  }
+
+  // Widget helper para el resumen
+  Widget _buildResumenItem(IconData icon, String label, String value, Color color) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -368,6 +957,10 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
 
             // Cantidad producida
             _buildCantidadProducida(),
+            const SizedBox(height: 24),
+
+            // Sección de colaboradores
+            _buildColaboradores(),
             const SizedBox(height: 24),
 
             // Materias primas
@@ -496,6 +1089,129 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                 return null;
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildColaboradores() {
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.people, color: Colors.indigo),
+                SizedBox(width: 8),
+                Text(
+                  'COLABORADORES',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    letterSpacing: 1,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  ' *',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Spacer(),
+                TextButton.icon(
+                  onPressed: _agregarColaborador,
+                  icon: Icon(Icons.person_add, size: 18),
+                  label: Text('Agregar'),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info, color: Colors.blue, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Indica quiénes trabajaron realmente en esta producción',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_colaboradoresSeleccionados.isEmpty)
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Icon(Icons.person_off, size: 48, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text(
+                        'No hay colaboradores asignados',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        onPressed: _agregarColaborador,
+                        icon: Icon(Icons.person_add),
+                        label: Text('Agregar Colaborador'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ..._colaboradoresSeleccionados.asMap().entries.map((entry) {
+                final index = entry.key;
+                final colab = entry.value;
+                final nombreCompleto = '${colab['nombre']} ${colab['apellido']}';
+                
+                return Container(
+                  margin: EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white,
+                  ),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.indigo,
+                      child: Text(
+                        colab['nombre'].toString()[0].toUpperCase(),
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    title: Text(
+                      nombreCompleto,
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text('Código: ${colab['codigo']}'),
+                    trailing: IconButton(
+                      icon: Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _eliminarColaborador(index),
+                      tooltip: 'Eliminar',
+                    ),
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -872,6 +1588,60 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ============================================================================
+// DIALOG: Seleccionar Colaborador
+// ============================================================================
+class _DialogSeleccionarColaborador extends StatelessWidget {
+  final List<Map<String, dynamic>> colaboradores;
+
+  const _DialogSeleccionarColaborador({
+    required this.colaboradores,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.person_add, color: Colors.blue),
+          SizedBox(width: 8),
+          Text('Seleccionar Colaborador'),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: colaboradores.length,
+          itemBuilder: (context, index) {
+            final colab = colaboradores[index];
+            final nombreCompleto = '${colab['nombre']} ${colab['apellido']}';
+            
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.indigo,
+                child: Text(
+                  colab['nombre'].toString()[0].toUpperCase(),
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+              title: Text(nombreCompleto),
+              subtitle: Text('Código: ${colab['codigo']}'),
+              onTap: () => Navigator.pop(context, colab),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancelar'),
+        ),
+      ],
     );
   }
 }

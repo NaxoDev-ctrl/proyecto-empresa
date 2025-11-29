@@ -1,6 +1,6 @@
 class Colaborador {
   final int id;
-  final String codigo;
+  final int codigo;
   final String nombre;
   final String apellido;
   final String nombreCompleto;

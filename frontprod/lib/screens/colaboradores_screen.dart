@@ -60,7 +60,7 @@ class _ColaboradoresScreenState extends State<ColaboradoresScreen> {
         _colaboradoresFiltrados = _colaboradores;
       } else {
         _colaboradoresFiltrados = _colaboradores.where((c) {
-          return c.codigo.toLowerCase().contains(query) ||
+          return c.codigo.toString().contains(query) ||
                  c.nombreCompleto.toLowerCase().contains(query);
         }).toList();
       }
@@ -431,9 +431,9 @@ class _ColaboradoresScreenState extends State<ColaboradoresScreen> {
                   child: ListTile(
                     leading: CircleAvatar(
                       child: Text(
-                        colaborador.codigo. length >= 3
-                        ? colaborador.codigo.substring(0, 3)
-                        : colaborador.codigo,
+                        colaborador.codigo.toString().length >= 3
+                        ? colaborador.codigo.toString().substring(0, 3)
+                        : colaborador.codigo.toString(),
                         style: const TextStyle(fontSize: 16),
                       ),
                     ),

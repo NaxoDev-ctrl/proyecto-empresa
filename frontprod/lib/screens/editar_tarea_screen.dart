@@ -134,7 +134,7 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
     final query = _searchColaboradorController.text.toLowerCase();
     setState(() {
       _colaboradoresFiltrados = _colaboradores.where((c) {
-        return c.codigo.toLowerCase().contains(query) ||
+        return c.codigo.toString().contains(query) ||
                c.nombreCompleto.toLowerCase().contains(query);
       }).toList();
     });

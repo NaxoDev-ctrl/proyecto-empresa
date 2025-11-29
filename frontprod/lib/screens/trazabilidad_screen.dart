@@ -1595,12 +1595,56 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
 // ============================================================================
 // DIALOG: Seleccionar Colaborador
 // ============================================================================
-class _DialogSeleccionarColaborador extends StatelessWidget {
+class _DialogSeleccionarColaborador extends StatefulWidget {
   final List<Map<String, dynamic>> colaboradores;
 
   const _DialogSeleccionarColaborador({
     required this.colaboradores,
   });
+
+  @override
+  State<_DialogSeleccionarColaborador> createState() => 
+      _DialogSeleccionarColaboradorState();
+}
+
+class _DialogSeleccionarColaboradorState 
+    extends State<_DialogSeleccionarColaborador> {
+  
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _colaboradoresFiltrados = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _colaboradoresFiltrados = widget.colaboradores;
+    _searchController.addListener(_filtrarColaboradores);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filtrarColaboradores() {
+    final query = _searchController.text.toLowerCase();
+    
+    setState(() {
+      if (query.isEmpty) {
+        _colaboradoresFiltrados = widget.colaboradores;
+      } else {
+        _colaboradoresFiltrados = widget.colaboradores.where((colab) {
+          final nombreCompleto = 
+              '${colab['nombre']} ${colab['apellido']}'.toLowerCase();
+          
+          // ✅ Convertir codigo a String para búsqueda
+          final codigoStr = colab['codigo'].toString();
+          
+          return codigoStr.contains(query) || nombreCompleto.contains(query);
+        }).toList();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1609,31 +1653,118 @@ class _DialogSeleccionarColaborador extends StatelessWidget {
         children: [
           Icon(Icons.person_add, color: Colors.blue),
           SizedBox(width: 8),
-          Text('Seleccionar Colaborador'),
+          Expanded(child: Text('Seleccionar Colaborador')),
         ],
       ),
       content: SizedBox(
         width: double.maxFinite,
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: colaboradores.length,
-          itemBuilder: (context, index) {
-            final colab = colaboradores[index];
-            final nombreCompleto = '${colab['nombre']} ${colab['apellido']}';
+        height: 400,
+        child: Column(
+          children: [
+            // Campo de búsqueda
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar por código o nombre...',
+                prefixIcon: Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16),
+              ),
+              autofocus: false,
+            ),
+            const SizedBox(height: 16),
             
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Colors.indigo,
+            // Contador de resultados
+            if (_searchController.text.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  colab['nombre'].toString()[0].toUpperCase(),
-                  style: TextStyle(color: Colors.white),
+                  '${_colaboradoresFiltrados.length} resultado(s)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
                 ),
               ),
-              title: Text(nombreCompleto),
-              subtitle: Text('Código: ${colab['codigo']}'),
-              onTap: () => Navigator.pop(context, colab),
-            );
-          },
+            
+            // Lista de colaboradores filtrados
+            Expanded(
+              child: _colaboradoresFiltrados.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: 64,
+                            color: Colors.grey[300],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No se encontraron colaboradores',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 16,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Intenta con otro término de búsqueda',
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _colaboradoresFiltrados.length,
+                      itemBuilder: (context, index) {
+                        final colab = _colaboradoresFiltrados[index];
+                        final nombreCompleto = 
+                            '${colab['nombre']} ${colab['apellido']}';
+                        
+                        return Card(
+                          margin: EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Colors.indigo,
+                              child: Text(
+                                colab['nombre'].toString()[0].toUpperCase(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            title: Text(
+                              nombreCompleto,
+                              style: TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                            subtitle: Text('Código: ${colab['codigo']}'),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey,
+                            ),
+                            onTap: () => Navigator.pop(context, colab),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
       actions: [

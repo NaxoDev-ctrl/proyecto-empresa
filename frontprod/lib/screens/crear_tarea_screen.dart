@@ -586,7 +586,7 @@ class _ColaboradoresDialogState extends State<_ColaboradoresDialog> {
       } else {
         _colaboradoresMostrados = widget.colaboradores.where((c) {
           // Filtrado por código O nombre
-          return c.codigo.toLowerCase().contains(lowerCaseQuery) ||
+          return c.codigo.toString().contains(lowerCaseQuery) ||
                  c.nombreCompleto.toLowerCase().contains(lowerCaseQuery);
         }).toList();
       }

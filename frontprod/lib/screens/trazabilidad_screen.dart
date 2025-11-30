@@ -1791,63 +1791,243 @@ class _DialogReproceso extends StatefulWidget {
 
 class _DialogReprocesoState extends State<_DialogReproceso> {
   final _cantidadController = TextEditingController();
-  final _descripcionController = TextEditingController();
+  final _otraCausaController = TextEditingController();
+
+  // Causas predefinidas (deben coincidir con CAUSAS_CHOICES del backend)
+  final List<Map<String, String>> _causasDisponibles = [
+    {'id': 'temperatura_inadecuada', 'nombre': 'Temperatura Inadecuada'},
+    {'id': 'tiempo_excedido', 'nombre': 'Tiempo de Proceso Excedido'},
+    {'id': 'mezcla_incorrecta', 'nombre': 'Mezcla Incorrecta'},
+    {'id': 'contaminacion', 'nombre': 'Contaminación'},
+    {'id': 'error_operador', 'nombre': 'Error del Operador'},
+    {'id': 'falla_maquina', 'nombre': 'Falla de Máquina'},
+    {'id': 'materia_prima_defectuosa', 'nombre': 'Materia Prima Defectuosa'},
+    {'id': 'otro', 'nombre': 'Otro (especificar)'},
+  ];
+
+  // Set para almacenar múltiples causas seleccionadas
+  Set<String> _causasSeleccionadas = {};
 
   @override
   void dispose() {
     _cantidadController.dispose();
-    _descripcionController.dispose();
+    _otraCausaController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Agregar Reproceso'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
+      title: Row(
         children: [
-          TextFormField(
-            controller: _cantidadController,
-            decoration: InputDecoration(
-              labelText: 'Cantidad',
-              suffixText: 'kg',
-            ),
-            keyboardType: TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _descripcionController,
-            decoration: InputDecoration(
-              labelText: 'Descripción',
-            ),
-            maxLines: 3,
-          ),
+          Icon(Icons.replay, color: Colors.orange),
+          SizedBox(width: 8),
+          Expanded(child: Text('Agregar Reproceso')),
         ],
+      ),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Campo de cantidad
+              TextFormField(
+                controller: _cantidadController,
+                decoration: InputDecoration(
+                  labelText: 'Cantidad *',
+                  suffixText: 'kg',
+                  prefixIcon: Icon(Icons.scale),
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
+              ),
+              
+              const SizedBox(height: 20),
+
+              Text(
+                'Causas del Reproceso *',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              
+              Text(
+                'Selecciona una o más causas',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Lista de checkboxes
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: _causasDisponibles.map((causa) {
+                    return CheckboxListTile(
+                      title: Text(causa['nombre']!),
+                      value: _causasSeleccionadas.contains(causa['id']),
+                      onChanged: (value) {
+                        setState(() {
+                          if (value == true) {
+                            _causasSeleccionadas.add(causa['id']!);
+                          } else {
+                            _causasSeleccionadas.remove(causa['id']);
+                          }
+                        });
+                      },
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                    );
+                  }).toList(),
+                ),
+              ),
+              
+              // Contador de causas seleccionadas
+              if (_causasSeleccionadas.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${_causasSeleccionadas.length} causa(s) seleccionada(s)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.orange.shade900,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+              
+              // Campo de texto para "Otro" (solo si selecciona "otro")
+              if (_causasSeleccionadas.contains('otro')) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.edit, size: 20, color: Colors.orange),
+                          SizedBox(width: 8),
+                          Text(
+                            'Especifica la otra causa',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      TextFormField(
+                        controller: _otraCausaController,
+                        decoration: InputDecoration(
+                          hintText: 'Describe la causa específica...',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
+                        maxLength: 200,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text('Cancelar'),
         ),
-        ElevatedButton(
+        ElevatedButton.icon(
           onPressed: () {
-            if (_cantidadController.text.isEmpty || 
-                _descripcionController.text.isEmpty) {
+            if (_cantidadController.text.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Completa todos los campos')),
+                SnackBar(
+                  content: Text('Ingresa la cantidad de reproceso'),
+                  backgroundColor: Colors.red,
+                ),
               );
               return;
             }
 
+            // Validación: al menos una causa seleccionada
+            if (_causasSeleccionadas.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Selecciona al menos una causa del reproceso'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            // Validación: si seleccionó "otro", debe especificar
+            if (_causasSeleccionadas.contains('otro') && 
+                _otraCausaController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Especifica la causa de "Otro"'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            // Preparar descripción: combinar todas las causas seleccionadas
+            List<String> descripciones = [];
+            
+            for (String causaId in _causasSeleccionadas) {
+              if (causaId == 'otro') {
+                // Si es "otro", usar el texto del usuario
+                descripciones.add(_otraCausaController.text.trim());
+              } else {
+                // Si es predefinida, usar el nombre
+                final causa = _causasDisponibles.firstWhere(
+                  (c) => c['id'] == causaId,
+                );
+                descripciones.add(causa['nombre']!);
+              }
+            }
+            
+            // Unir todas las causas con comas
+            String descripcionFinal = descripciones.join(', ');
+
             widget.onAgregar({
               'cantidad_kg': double.parse(_cantidadController.text),
-              'descripcion': _descripcionController.text,
+              'descripcion': descripcionFinal,
             });
 
             Navigator.pop(context);
           },
-          child: Text('Agregar'),
+          icon: Icon(Icons.add),
+          label: Text('Agregar'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+          ),
         ),
       ],
     );
@@ -1868,63 +2048,245 @@ class _DialogMerma extends StatefulWidget {
 
 class _DialogMermaState extends State<_DialogMerma> {
   final _cantidadController = TextEditingController();
-  final _descripcionController = TextEditingController();
+  final _otraCausaController = TextEditingController();
+
+  // Causas predefinidas (deben coincidir con CAUSAS_CHOICES del backend)
+  final List<Map<String, String>> _causasDisponibles = [
+    {'id': 'desperdicio_corte', 'nombre': 'Desperdicio en Corte'},
+    {'id': 'producto_defectuoso', 'nombre': 'Producto Defectuoso'},
+    {'id': 'derrame', 'nombre': 'Derrame o Pérdida'},
+    {'id': 'caducidad', 'nombre': 'Producto Caducado'},
+    {'id': 'error_pesaje', 'nombre': 'Error en Pesaje'},
+    {'id': 'adherencia_equipo', 'nombre': 'Adherencia a Equipo'},
+    {'id': 'rechazo_calidad', 'nombre': 'Rechazo de Calidad'},
+    {'id': 'otro', 'nombre': 'Otro (especificar)'},
+  ];
+
+  // Set para almacenar múltiples causas seleccionadas
+  Set<String> _causasSeleccionadas = {};
 
   @override
   void dispose() {
     _cantidadController.dispose();
-    _descripcionController.dispose();
+    _otraCausaController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Agregar Merma'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
+      title: Row(
         children: [
-          TextFormField(
-            controller: _cantidadController,
-            decoration: InputDecoration(
-              labelText: 'Cantidad',
-              suffixText: 'kg',
-            ),
-            keyboardType: TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _descripcionController,
-            decoration: InputDecoration(
-              labelText: 'Descripción',
-            ),
-            maxLines: 3,
-          ),
+          Icon(Icons.delete_outline, color: Colors.red),
+          SizedBox(width: 8),
+          Expanded(child: Text('Agregar Merma')),
         ],
+      ),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Campo de cantidad
+              TextFormField(
+                controller: _cantidadController,
+                decoration: InputDecoration(
+                  labelText: 'Cantidad *',
+                  suffixText: 'kg',
+                  prefixIcon: Icon(Icons.scale),
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
+              ),
+              
+              const SizedBox(height: 20),
+              
+              // Título de causas
+              Text(
+                'Causas de la Merma *',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              
+              Text(
+                'Selecciona una o más causas',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Lista de checkboxes
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: _causasDisponibles.map((causa) {
+                    return CheckboxListTile(
+                      title: Text(causa['nombre']!),
+                      value: _causasSeleccionadas.contains(causa['id']),
+                      onChanged: (value) {
+                        setState(() {
+                          if (value == true) {
+                            _causasSeleccionadas.add(causa['id']!);
+                          } else {
+                            _causasSeleccionadas.remove(causa['id']);
+                          }
+                        });
+                      },
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                    );
+                  }).toList(),
+                ),
+              ),
+              
+              // Contador de causas seleccionadas
+              if (_causasSeleccionadas.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${_causasSeleccionadas.length} causa(s) seleccionada(s)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red.shade900,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+              
+              // Campo de texto para "Otro" (solo si selecciona "otro")
+              if (_causasSeleccionadas.contains('otro')) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.edit, size: 20, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text(
+                            'Especifica la otra causa',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      TextFormField(
+                        controller: _otraCausaController,
+                        decoration: InputDecoration(
+                          hintText: 'Describe la causa específica...',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
+                        maxLength: 200,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text('Cancelar'),
         ),
-        ElevatedButton(
+        ElevatedButton.icon(
           onPressed: () {
-            if (_cantidadController.text.isEmpty || 
-                _descripcionController.text.isEmpty) {
+            if (_cantidadController.text.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Completa todos los campos')),
+                SnackBar(
+                  content: Text('Completa todos los campos'),
+                  backgroundColor: Colors.red,
+                ),
               );
               return;
             }
 
+            // Validación: al menos una causa seleccionada
+            if (_causasSeleccionadas.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Selecciona al menos una causa de la merma'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            // Validación: si seleccionó "otro", debe especificar
+            if (_causasSeleccionadas.contains('otro') && 
+                _otraCausaController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Especifica la causa de "Otro"'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            // Preparar descripción: combinar todas las causas seleccionadas
+            List<String> descripciones = [];
+            
+            for (String causaId in _causasSeleccionadas) {
+              if (causaId == 'otro') {
+                // Si es "otro", usar el texto del usuario
+                descripciones.add(_otraCausaController.text.trim());
+              } else {
+                // Si es predefinida, usar el nombre
+                final causa = _causasDisponibles.firstWhere(
+                  (c) => c['id'] == causaId,
+                );
+                descripciones.add(causa['nombre']!);
+              }
+            }
+            
+            // Unir todas las causas con comas
+            String descripcionFinal = descripciones.join(', ');
+
+            // Retornar datos
             widget.onAgregar({
               'cantidad_kg': double.parse(_cantidadController.text),
-              'descripcion': _descripcionController.text,
+              'descripcion': descripcionFinal,
             });
 
             Navigator.pop(context);
           },
-          child: Text('Agregar'),
+          icon: Icon(Icons.add),
+          label: Text('Agregar'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+          ),
         ),
       ],
     );

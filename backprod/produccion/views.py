@@ -640,6 +640,8 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
         estado = self.request.query_params.get('estado', None)
         fecha = self.request.query_params.get('fecha', None)
         turno_id = self.request.query_params.get('turno', None)
+        linea_id = self.request.query_params.get('linea', None) 
+        producto_id = self.request.query_params.get('producto', None)
         
         if estado:
             queryset = queryset.filter(estado=estado)
@@ -649,6 +651,12 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
         
         if turno_id:
             queryset = queryset.filter(hoja_procesos__tarea__turno_id=turno_id)
+
+        if linea_id:
+            queryset = queryset.filter(hoja_procesos__tarea__linea_id=linea_id)
+        
+        if producto_id:
+            queryset = queryset.filter(hoja_procesos__tarea__producto_id=producto_id)
         
         return queryset.order_by('-fecha_creacion')
     

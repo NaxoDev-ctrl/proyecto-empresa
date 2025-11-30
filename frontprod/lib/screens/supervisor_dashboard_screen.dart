@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import 'crear_tarea_screen.dart';
 import 'lista_tareas_screen.dart';
 import 'colaboradores_screen.dart';
+import 'firma_supervisor_screen.dart';
 
 class SupervisorDashboard extends StatefulWidget {
   const SupervisorDashboard({super.key});
@@ -32,6 +33,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
     final screens = [
       ListaTareasScreen(key: ValueKey(_refreshKey)),
       ColaboradoresScreen(key: ValueKey(_refreshKey)),
+      FirmaSupervisorScreen(key: ValueKey(_refreshKey)),
       const Center(child: Text('Reportes (Próximamente)')),
     ];
 
@@ -95,6 +97,10 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           NavigationDestination(
             icon: Icon(Icons.people),
             label: 'Colaboradores',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart),
+            label: 'Trazabilidad',
           ),
           NavigationDestination(
             icon: Icon(Icons.bar_chart),

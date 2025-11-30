@@ -8,9 +8,7 @@ import 'package:mime/mime.dart';
 
 class ApiService {
   // IMPORTANTE: Cambia esta URL según tu configuración
-  // Para emulador Android: 'http://10.0.2.2:8000'
-  // Para emulador iOS: 'http://127.0.0.1:8000'
-  // Para dispositivo físico: 'http://192.168.0.11:8000'
+  // Para dispositivo físico (casa naxo): 'http://192.168.1.16:8000/api'
   static const String baseUrl = 'http://127.0.0.1:8000/api';
 
   // Singleton pattern
@@ -935,6 +933,86 @@ class ApiService {
       throw Exception('Error de conexión: $e');
     }
   }
+
+  // ========================================================================
+  // Obtener todas las trazabilidades (con filtros opcionales)
+  // ========================================================================
+  Future<List<dynamic>> getTrazabilidades({Map<String, String>? queryParams}) async {
+    try {
+      String url = '$baseUrl/trazabilidades/';
+      
+      // Agregar query params si existen
+      if (queryParams != null && queryParams.isNotEmpty) {
+        final queryString = queryParams.entries
+            .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+            .join('&');
+        url += '?$queryString';
+      }
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(utf8.decode(response.bodyBytes));
+        final data = jsonResponse is List ? jsonResponse : jsonResponse['results'];
+        return data;
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener trazabilidades');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+  // ========================================================================
+  // Actualizar trazabilidad
+  // ========================================================================
+  Future<Map<String, dynamic>> updateTrazabilidad(
+    int trazabilidadId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/'),
+        headers: _getHeaders(),
+        body: json.encode(data),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al actualizar trazabilidad');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   /// Eliminar token
   Future<void> _clearToken() async {

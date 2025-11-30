@@ -430,7 +430,7 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
                   child: Text(
-                    colaborador['codigo'].substring(0, 2).toUpperCase(),
+                    colaborador['codigo'].toString().substring(0, 2).toUpperCase(),
                   ),
                 ),
                 title: Text(colaborador['nombre_completo']),

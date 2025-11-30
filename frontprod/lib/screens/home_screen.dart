@@ -3,6 +3,7 @@ import 'seleccion_linea_screen.dart';
 import 'login_screen.dart';
 import 'supervisor_dashboard_screen.dart';
 import '../services/api_service.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -116,24 +117,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color.fromARGB(255, 137, 29, 67),
       body: Stack(
         children: [
-          // Fondo con degradado
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.blue.shade700,
-                  Colors.blue.shade400,
-                  Colors.white,
-                ],
-                stops: const [0.0, 0.3, 1.0],
-              ),
-            ),
-          ),
-          
           // Contenido principal
           SafeArea(
             child: Column(
@@ -152,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           // Logo y título centrados
                           _buildLogoYTitulo(),
                           
-                          const SizedBox(height: 48),
+                          const SizedBox(height: 1),
                           
                           // Card de operarios
                           _buildOperariosCard(),
@@ -227,47 +213,33 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         // Logo
         Container(
-          padding: EdgeInsets.all(20),
+          padding: EdgeInsets.all(1),
           child: ClipRRect(
             child: Image.asset(
-              'assets/images/logo_entrelagos.png', // <-- TU LOGO AQUÍ
-              width: 170,
-              height: 170,
+              'assets/images/logo_entrelagos3.png', 
+              width: 400,
+              height: 400,
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) {
                 // Si la imagen no carga, mostrar ícono de respaldo
                 return Icon(
                   Icons.business,
                   size: 64,
-                  color: Colors.red.shade700,
+                  color: const Color.fromARGB(255, 137, 29, 66),
                 );
               },
             ),
           ),
         ),
 
-        SizedBox(height: 24),
-        
-        // Título
-        const Text(
-          'Chocolatería Entrelagos',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            letterSpacing: 1.2,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        
-        const SizedBox(height: 8),
-        
+        SizedBox(height: 1),
+
         // Subtítulo
         const Text(
           'Sistema de Trazabilidad',
           style: TextStyle(
             fontSize: 16,
-            color: Colors.white70,
+            color: Color.fromARGB(255, 255, 217, 198),
             letterSpacing: 0.5,
           ),
           textAlign: TextAlign.center,
@@ -278,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildOperariosCard() {
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(6),
       child: ConstrainedBox(
         constraints: const BoxConstraints(
           maxWidth: 400,

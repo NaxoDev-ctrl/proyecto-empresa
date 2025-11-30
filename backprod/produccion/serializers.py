@@ -762,39 +762,63 @@ class TrazabilidadListSerializer(serializers.ModelSerializer):
     Serializer para listar trazabilidades.
     """
     
-    producto_nombre = serializers.CharField(
-        source='hoja_procesos.tarea.producto.nombre', 
-        read_only=True
-    )
-    linea_nombre = serializers.CharField(
-        source='hoja_procesos.tarea.linea.nombre', 
-        read_only=True
-    )
+    hoja_procesos = serializers.SerializerMethodField()
+    firmas = serializers.SerializerMethodField()
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
-    tiene_firmas = serializers.SerializerMethodField()
     
     class Meta:
         model = Trazabilidad
         fields = [
             'id',
             'hoja_procesos',
-            'producto_nombre',
-            'linea_nombre',
             'cantidad_producida',
             'estado',
             'estado_display',
+            'observaciones',
             'fecha_creacion',
-            'tiene_firmas'
+            'firmas'
         ]
     
-    def get_tiene_firmas(self, obj):
-        """Indica qué firmas tiene"""
-        firmas = obj.firmas.all()
+    def get_hoja_procesos(self, obj):
+        """Expandir hoja_procesos con tarea completa"""
+        if not obj.hoja_procesos:
+            return None
+        
+        hoja = obj.hoja_procesos
+        tarea = hoja.tarea
+        
         return {
-            'supervisor': firmas.filter(tipo_firma='supervisor').exists(),
-            'control_calidad': firmas.filter(tipo_firma='control_calidad').exists()
+            'id': hoja.id,
+            'tarea': {
+                'id': tarea.id,
+                'fecha': tarea.fecha,
+                'producto': {
+                    'codigo': tarea.producto.codigo,
+                    'nombre': tarea.producto.nombre,
+                },
+                'linea': {
+                    'id': tarea.linea.id,
+                    'nombre': tarea.linea.nombre,
+                },
+                'turno': {
+                    'id': tarea.turno.id,
+                    'nombre': tarea.turno.nombre,
+                },
+            }
         }
-
+    
+    def get_firmas(self, obj):
+        """Obtener firmas con información del usuario"""
+        firmas = obj.firmas.all()
+        return [
+            {
+                'id': firma.id,
+                'tipo_firma': firma.tipo_firma,
+                'fecha_firma': firma.fecha_firma,
+                'usuario_nombre': firma.usuario.get_full_name() or firma.usuario.username,
+            }
+            for firma in firmas
+        ]
 
 # ============================================================================
 # SERIALIZER: Trazabilidad (Detalle)
@@ -804,13 +828,12 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
     Serializer para ver detalle completo de una trazabilidad.
     """
     
-    hoja_procesos_detalle = HojaProcesosDetailSerializer(source='hoja_procesos', read_only=True)
+    hoja_procesos_detalle = serializers.SerializerMethodField()
     materias_primas_usadas = TrazabilidadMateriaPrimaSerializer(many=True, read_only=True)
     reprocesos = ReprocesoSerializer(many=True, read_only=True)
     mermas = MermaSerializer(many=True, read_only=True)
     foto_etiqueta = FotoEtiquetaSerializer(read_only=True)
     firmas = FirmaTrazabilidadSerializer(many=True, read_only=True)
-    # AGREGAR ESTE CAMPO para mostrar la URL de la foto
     foto_etiquetas_url = serializers.SerializerMethodField()
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     
@@ -834,6 +857,34 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
             'foto_etiqueta',
             'firmas'
         ]
+
+    def get_hoja_procesos_detalle(self, obj):
+        """Expandir hoja_procesos con tarea completa (igual que en TrazabilidadListSerializer)"""
+        if not obj.hoja_procesos:
+            return None
+        
+        hoja = obj.hoja_procesos
+        tarea = hoja.tarea
+        
+        return {
+            'id': hoja.id,
+            'tarea': {
+                'id': tarea.id,
+                'fecha': tarea.fecha,
+                'producto': {
+                    'codigo': tarea.producto.codigo,
+                    'nombre': tarea.producto.nombre,
+                },
+                'linea': {
+                    'id': tarea.linea.id,
+                    'nombre': tarea.linea.nombre,
+                },
+                'turno': {
+                    'id': tarea.turno.id,
+                    'nombre': tarea.turno.nombre,
+                },
+            }
+        }
 
     def get_foto_etiquetas_url(self, obj):
         """Retorna la URL completa de la foto si existe"""

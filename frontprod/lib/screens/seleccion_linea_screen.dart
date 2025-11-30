@@ -55,16 +55,8 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primaryContainer,
-            ],
-          ),
-        ),
+        width: double.infinity,
+        color: const Color.fromARGB(255, 137, 29, 67),      
         child: SafeArea(
           child: Column(
             children: [
@@ -73,26 +65,20 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
                 padding: const EdgeInsets.all(32.0),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.factory,
-                      size: 80,
-                      color: Colors.white,
+                    Image.asset(
+                      'assets/images/logo_entrelagosE.png',
+                      width: 200,
+                      height: 200,
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Chocolatería Entrelagos',
+                      'Selecciona tu línea de producción',
                       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Colors.white,
+                        color: const Color.fromARGB(255, 255, 217, 198),
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Selecciona tu línea de producción',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white70,
-                      ),
-                    ),
                   ],
                 ),
               ),

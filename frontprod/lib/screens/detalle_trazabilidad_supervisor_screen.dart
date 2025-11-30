@@ -60,13 +60,20 @@ class _DetalleTrazabilidadSupervisorScreenState
     try {
       final data = await _apiService.getTrazabilidadDetalle(widget.trazabilidadId);
 
+      print('🔍 DATOS DE TRAZABILIDAD RECIBIDOS:');
+      print('Tipo: ${data.runtimeType}');
+      print('Contenido completo: $data');
+      print('hoja_procesos tipo: ${data['hoja_procesos'].runtimeType}');
+      print('hoja_procesos valor: ${data['hoja_procesos']}');
+
       setState(() {
         _trazabilidad = data;
         _cantidadProducidaController.text =
-            data['cantidad_producida_kg']?.toString() ?? '';
+            data['cantidad_producida']?.toString() ?? '';
         _observacionesController.text = data['observaciones'] ?? '';
       });
     } catch (e) {
+      print('❌ ERROR al cargar trazabilidad: $e');
       setState(() {
         _error = 'Error al cargar trazabilidad: $e';
       });
@@ -97,10 +104,8 @@ class _DetalleTrazabilidadSupervisorScreenState
 
     try {
       final body = {
-        'cantidad_producida_kg': cantidadProducida,
+        'cantidad_producida': cantidadProducida.toInt(),
         'observaciones': _observacionesController.text.trim(),
-        'hoja_procesos': _trazabilidad!['hoja_procesos']['id'],
-        'lote_produccion': _trazabilidad!['lote_produccion'],
       };
 
       await _apiService.updateTrazabilidad(widget.trazabilidadId, body);
@@ -204,10 +209,27 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   // ========== UI: INFORMACIÓN DE LA TAREA ==========
   Widget _buildSeccionTarea() {
-    final tarea = _trazabilidad!['hoja_procesos']['tarea'];
+    // Verificar que existan los datos
+    final hojaProcesos = _trazabilidad!['hoja_procesos_detalle'];
+    if (hojaProcesos == null || hojaProcesos is! Map<String, dynamic>) {
+      return const SizedBox.shrink();
+    }
+
+    final tarea = hojaProcesos['tarea'];
+    if (tarea == null || tarea is! Map<String, dynamic>) {
+      return const SizedBox.shrink();
+    }
+
     final producto = tarea['producto'];
     final linea = tarea['linea'];
     final turno = tarea['turno'];
+
+    if (producto == null || producto is! Map<String, dynamic> ||
+        linea == null || linea is! Map<String, dynamic> ||
+        turno == null || turno is! Map<String, dynamic>) {
+      return const SizedBox.shrink();
+    }
+
     final fecha = tarea['fecha'];
 
     return Card(
@@ -227,12 +249,11 @@ class _DetalleTrazabilidadSupervisorScreenState
             ),
             const Divider(),
             const SizedBox(height: 8),
-            _buildInfoRow('Producto', producto['nombre']),
-            _buildInfoRow('Código', producto['codigo']),
-            _buildInfoRow('Línea', linea['nombre']),
-            _buildInfoRow('Turno', turno['nombre']),
-            _buildInfoRow('Fecha', DateFormat('dd/MM/yyyy').format(DateTime.parse(fecha))),
-            _buildInfoRow('Lote', _trazabilidad!['lote_produccion']),
+            _buildInfoRow('Producto', producto['nombre']?.toString() ?? ''),
+            _buildInfoRow('Código', producto['codigo']?.toString() ?? ''),
+            _buildInfoRow('Línea', linea['nombre']?.toString() ?? ''),
+            _buildInfoRow('Turno', turno['nombre']?.toString() ?? ''),
+            _buildInfoRow('Fecha', fecha != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(fecha)) : ''),
             _buildInfoRow(
               'Fecha Creación',
               DateFormat('dd/MM/yyyy HH:mm').format(
@@ -247,8 +268,9 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   // ========== UI: CANTIDAD PRODUCIDA Y OBSERVACIONES ==========
   Widget _buildSeccionProduccion() {
-    final tieneFirmaSupervisor = (_trazabilidad!['firmas'] as List).any(
-      (f) => f['tipo_firma'] == 'supervisor',
+    final firmas = _trazabilidad!['firmas'] as List? ?? [];
+    final tieneFirmaSupervisor = firmas.any(
+      (f) => f is Map && f['tipo_firma'] == 'supervisor',
     );
 
     return Card(
@@ -289,16 +311,16 @@ class _DetalleTrazabilidadSupervisorScreenState
               TextFormField(
                 controller: _cantidadProducidaController,
                 decoration: const InputDecoration(
-                  labelText: 'Cantidad Producida (kg)',
+                  labelText: 'Cantidad Producida',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.production_quantity_limits),
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(decimal: false),
               )
             else
               _buildInfoRow(
                 'Cantidad Producida',
-                '${_trazabilidad!['cantidad_producida_kg']} kg',
+                '${_trazabilidad!['cantidad_producida']} unidades',
               ),
 
             const SizedBox(height: 16),

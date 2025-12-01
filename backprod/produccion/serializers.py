@@ -894,6 +894,51 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.foto_etiquetas.url)
             return obj.foto_etiquetas.url
         return None
+    
+    def to_representation(self, instance):
+        """
+        Personalizar la salida del serializer
+        """
+        data = super().to_representation(instance)
+        
+        # ==================== COLABORADORES ====================
+        # colaboradores_reales es un RelatedManager que apunta a TrazabilidadColaborador
+        # Necesitamos obtener los colaboradores desde el modelo intermedio
+        
+        print(f'\n👥 Serializando colaboradores de trazabilidad {instance.id}')
+        
+        colaboradores_lista = []
+        
+        try:
+            # Obtener todas las relaciones TrazabilidadColaborador
+            relaciones = instance.colaboradores_reales.all()
+            print(f'   📊 Relaciones encontradas: {relaciones.count()}')
+            
+            for relacion in relaciones:
+                # Cada relación tiene un atributo 'colaborador' que es el Colaborador real
+                colaborador = relacion.colaborador
+                
+                colaboradores_lista.append({
+                    'codigo': colaborador.codigo,
+                    'nombre': colaborador.nombre,
+                    'apellido': colaborador.apellido,
+                    'colaborador': {  # Estructura anidada por si la app la espera
+                        'codigo': colaborador.codigo,
+                        'nombre': colaborador.nombre,
+                        'apellido': colaborador.apellido
+                    }
+                })
+                print(f'   ✅ Serializado: {colaborador.nombre} {colaborador.apellido} (código: {colaborador.codigo})')
+        
+        except Exception as e:
+            print(f'   ❌ Error al serializar colaboradores: {e}')
+            import traceback
+            print(traceback.format_exc())
+        
+        data['colaboradores_reales'] = colaboradores_lista
+        print(f'   📦 Total colaboradores en respuesta: {len(colaboradores_lista)}')
+        
+        return data
 
 class JSONStringField(serializers.Field):
     """

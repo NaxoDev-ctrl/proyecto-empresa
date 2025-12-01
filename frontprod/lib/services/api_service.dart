@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mime/mime.dart';
+import 'dart:io';
 
 
 
@@ -971,42 +972,66 @@ class ApiService {
   // Actualizar trazabilidad
   // ========================================================================
   Future<Map<String, dynamic>> updateTrazabilidad(
-    int trazabilidadId, 
-    Map<String, dynamic> data
-  ) async {
-    try {
-      // Obtener token de SharedPreferences directamente
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      
-      if (token == null) {
-        throw Exception('No hay token de autenticación');
-      }
-      
-      final response = await http.patch(
-        Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(data),
-      );
+      int trazabilidadId,
+      Map<String, dynamic> datos,
+      File fotoEtiquetas,
+    ) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('token');
 
-      print('📤 UPDATE TRAZABILIDAD - Status: ${response.statusCode}');
-      print('📤 UPDATE TRAZABILIDAD - Body enviado: ${jsonEncode(data)}');
-      print('📤 UPDATE TRAZABILIDAD - Response: ${response.body}');
+        if (token == null) {
+          throw Exception('No hay token de autenticación');
+        }
 
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        final errorBody = jsonDecode(response.body);
-        throw Exception(errorBody['error'] ?? 'Error al actualizar trazabilidad');
+        final url = Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/');
+        
+        print('🌐 PATCH multipart a: $url');
+        print('📦 Datos: $datos');
+        print('📷 Foto: ${fotoEtiquetas.path}');
+
+        // Crear request multipart
+        var request = http.MultipartRequest('PATCH', url);
+        
+        // Agregar headers
+        request.headers['Authorization'] = 'Bearer $token';
+        
+        // Agregar la foto
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'foto_etiquetas',
+            fotoEtiquetas.path,
+          ),
+        );
+        
+        // Agregar los demás campos como JSON strings
+        request.fields['cantidad_producida'] = datos['cantidad_producida'].toString();
+        request.fields['observaciones'] = datos['observaciones'].toString();
+        request.fields['materias_primas'] = jsonEncode(datos['materias_primas']);
+        request.fields['reprocesos_data'] = jsonEncode(datos['reprocesos_data']);
+        request.fields['mermas_data'] = jsonEncode(datos['mermas_data']);
+        request.fields['colaboradores_codigos'] = jsonEncode(datos['colaboradores_codigos']);
+        
+        print('📤 Enviando request multipart...');
+        
+        // Enviar request
+        final streamedResponse = await request.send();
+        final response = await http.Response.fromStream(streamedResponse);
+        
+        print('📥 Response status: ${response.statusCode}');
+        print('📥 Response body: ${response.body}');
+
+        if (response.statusCode == 200) {
+          print('✅ Trazabilidad actualizada con foto exitosamente');
+          return jsonDecode(response.body);
+        } else {
+          throw Exception('Error ${response.statusCode}: ${response.body}');
+        }
+      } catch (e) {
+        print('❌ Error en updateTrazabilidadConFoto: $e');
+        rethrow;
       }
-    } catch (e) {
-      print('❌ ERROR en updateTrazabilidad: $e');
-      rethrow;
     }
-  }
 
 
 

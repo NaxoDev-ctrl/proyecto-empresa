@@ -4,9 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'dart:typed_data';
-
 import '../services/api_service.dart';
 
 class DetalleTrazabilidadSupervisorScreen extends StatefulWidget {
@@ -42,6 +41,9 @@ class _DetalleTrazabilidadSupervisorScreenState
   // ========== DATOS PARA EDICIÓN ==========
   final TextEditingController _cantidadProducidaController = TextEditingController();
   final TextEditingController _observacionesController = TextEditingController();
+
+  Uint8List? _fotoEtiqueta;
+  String? _nombreArchivoFoto;
   
   // Materias primas: Map<materia_prima_id, Map<lote, cantidad, unidad>>
   Map<String, Map<String, dynamic>> _materiasPrimasEditadas = {};
@@ -90,12 +92,12 @@ class _DetalleTrazabilidadSupervisorScreenState
         _trazabilidad = data;
         
         // ========== INICIALIZAR DATOS ORIGINALES ==========
-        _cantidadProducidaOriginal = data['cantidad_producida']?.toString() ?? '';
+        _cantidadProducidaOriginal = (data['cantidad_producida']?? 0).toString();
         _observacionesOriginal = data['observaciones'] ?? '';
         
         // Inicializar controllers
         _cantidadProducidaController.text = _cantidadProducidaOriginal;
-        _observacionesController.text = _observacionesOriginal;
+        _observacionesController.text = _observacionesOriginal ?? '';
         
         // ========== MATERIAS PRIMAS ORIGINALES ==========
         _materiasPrimasOriginales.clear();
@@ -246,6 +248,65 @@ class _DetalleTrazabilidadSupervisorScreenState
       return;
     }
 
+    if (_fotoEtiqueta == null) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.camera_alt, color: Colors.blue, size: 32),
+              SizedBox(width: 12),
+              Text('Falta Foto'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Debes tomar una foto de las etiquetas utilizadas en la producción.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'La foto es obligatoria para la trazabilidad',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancelar'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _tomarFoto();
+              },
+              icon: Icon(Icons.camera_alt),
+              label: Text('Tomar Foto Ahora'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     // Validar materias primas
     for (var mp in _materiasPrimasEditadas.values) {
       final cantidadStr = mp['cantidad_usada'].toString().trim();
@@ -300,8 +361,6 @@ class _DetalleTrazabilidadSupervisorScreenState
 
       print('📤 Datos a enviar: $body');
 
-      // Enviar actualización
-      await _apiService.updateTrazabilidad(widget.trazabilidadId, body);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -334,17 +393,18 @@ class _DetalleTrazabilidadSupervisorScreenState
   }
 
   // ========== AGREGAR/ELIMINAR REPROCESO ==========
-  void _agregarReproceso() {
-    showDialog(
+  void _agregarReproceso() async {
+    final resultado = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => _DialogReproceso(
-        onAgregar: (reproceso) {
-          setState(() {
-            _reprocesosEditados.add(reproceso);
-          });
-        },
-      ),
+      builder: (context) => const _DialogReproceso(),
     );
+    
+    if (resultado != null) {
+      setState(() {
+        _reprocesosEditados.add(resultado);
+      });
+      print('✅ Reproceso agregado: $resultado');
+    }
   }
 
   void _eliminarReproceso(int index) {
@@ -354,17 +414,18 @@ class _DetalleTrazabilidadSupervisorScreenState
   }
 
   // ========== AGREGAR/ELIMINAR MERMA ==========
-  void _agregarMerma() {
-    showDialog(
+  void _agregarMerma() async {
+    final resultado = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => _DialogMerma(
-        onAgregar: (merma) {
-          setState(() {
-            _mermasEditadas.add(merma);
-          });
-        },
-      ),
+      builder: (context) => const _DialogMerma(),
     );
+    
+    if (resultado != null) {
+      setState(() {
+        _mermasEditadas.add(resultado);
+      });
+      print('✅ Merma agregada: $resultado');
+    }
   }
 
   void _eliminarMerma(int index) {
@@ -405,6 +466,57 @@ class _DetalleTrazabilidadSupervisorScreenState
       _colaboradoresSeleccionados.removeAt(index);
     });
   }
+
+  Future<void> _tomarFoto() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _fotoEtiqueta = bytes;
+          _nombreArchivoFoto = image.name;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al tomar foto: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _seleccionarFotoGaleria() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _fotoEtiqueta = bytes;
+          _nombreArchivoFoto = image.name;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al seleccionar foto: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
 
   // ========== FIRMAR TRAZABILIDAD ==========
   Future<void> _firmarTrazabilidad() async {
@@ -758,6 +870,99 @@ class _DetalleTrazabilidadSupervisorScreenState
             ],
           ),
         ],
+      ),
+    );
+  }
+  // UI de seleccionar foto de etiquetas
+  Widget _buildFotoEtiquetas() {
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'FOTO DE ETIQUETAS *',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_fotoEtiqueta == null)
+              Column(
+                children: [
+                  Text(
+                    'Debes tomar una foto de las etiquetas utilizadas',
+                    style: TextStyle(color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _tomarFoto,
+                          icon: Icon(Icons.camera_alt),
+                          label: Text('Tomar Foto'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _seleccionarFotoGaleria,
+                          icon: Icon(Icons.photo_library),
+                          label: Text('Galería'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            else
+              Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(
+                      _fotoEtiqueta!,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _tomarFoto,
+                          icon: Icon(Icons.refresh),
+                          label: Text('Tomar otra'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _fotoEtiqueta = null;
+                            });
+                          },
+                          icon: Icon(Icons.delete, color: Colors.red),
+                          label: Text('Eliminar'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1241,6 +1446,7 @@ class _DetalleTrazabilidadSupervisorScreenState
                         _buildSeccionColaboradores(),
                         _buildSeccionReprocesos(),
                         _buildSeccionMermas(),
+                        _buildFotoEtiquetas(),
                         _buildSeccionFirmas(),
                         const SizedBox(height: 32),
                       ],
@@ -1379,9 +1585,7 @@ class _DialogSeleccionarColaboradorState
 }
 
 class _DialogReproceso extends StatefulWidget {
-  final Function(Map<String, dynamic>) onAgregar;
-
-  const _DialogReproceso({required this.onAgregar});
+  const _DialogReproceso();
 
   @override
   State<_DialogReproceso> createState() => _DialogReprocesoState();
@@ -1389,46 +1593,84 @@ class _DialogReproceso extends StatefulWidget {
 
 class _DialogReprocesoState extends State<_DialogReproceso> {
   final _cantidadController = TextEditingController();
-  final _descripcionController = TextEditingController();
+  final _otroController = TextEditingController();
+  final List<String> _causasDisponibles = [
+    'Producto fuera de especificación',
+    'Error en proceso',
+    'Problema de temperatura',
+    'Contaminación cruzada',
+    'Devolución de cliente',
+    'Exceso de producción',
+    'Otros',
+  ];
+  final Set<String> _causasSeleccionadas = {};
 
   @override
   void dispose() {
     _cantidadController.dispose();
-    _descripcionController.dispose();
+    _otroController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool otrosSeleccionado = _causasSeleccionadas.contains('Otros');
+    
     return AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.loop, color: Colors.orange),
-          SizedBox(width: 8),
-          Expanded(child: Text('Agregar Reproceso')),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextFormField(
-            controller: _cantidadController,
-            decoration: const InputDecoration(
-              labelText: 'Cantidad (kg)',
-              border: OutlineInputBorder(),
+      title: const Text('Agregar Reproceso'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _cantidadController,
+              decoration: const InputDecoration(
+                labelText: 'Cantidad (kg)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _descripcionController,
-            decoration: const InputDecoration(
-              labelText: 'Descripción',
-              border: OutlineInputBorder(),
+            const SizedBox(height: 16),
+            const Text(
+              'Causas del reproceso:',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            maxLines: 3,
-          ),
-        ],
+            const SizedBox(height: 8),
+            ..._causasDisponibles.map((causa) => CheckboxListTile(
+              title: Text(causa),
+              value: _causasSeleccionadas.contains(causa),
+              onChanged: (value) {
+                setState(() {
+                  if (value == true) {
+                    _causasSeleccionadas.add(causa);
+                  } else {
+                    _causasSeleccionadas.remove(causa);
+                    // Si deselecciona "Otros", limpiar el campo
+                    if (causa == 'Otros') {
+                      _otroController.clear();
+                    }
+                  }
+                });
+              },
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            )),
+            // Campo de texto que aparece solo si "Otros" está seleccionado
+            if (otrosSeleccionado) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _otroController,
+                decoration: const InputDecoration(
+                  labelText: 'Especifique otra causa',
+                  border: OutlineInputBorder(),
+                  hintText: 'Describa la causa',
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -1437,23 +1679,42 @@ class _DialogReprocesoState extends State<_DialogReproceso> {
         ),
         ElevatedButton(
           onPressed: () {
-            if (_cantidadController.text.isEmpty || 
-                _descripcionController.text.isEmpty) {
+            final cantidad = double.tryParse(_cantidadController.text);
+            if (cantidad == null || cantidad <= 0) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Completa todos los campos'),
-                  backgroundColor: Colors.red,
-                ),
+                const SnackBar(content: Text('Ingrese una cantidad válida')),
+              );
+              return;
+            }
+            
+            if (_causasSeleccionadas.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Seleccione al menos una causa')),
               );
               return;
             }
 
-            widget.onAgregar({
-              'cantidad_kg': double.parse(_cantidadController.text),
-              'descripcion': _descripcionController.text,
-            });
+            // Validar que si seleccionó "Otros", haya escrito algo
+            if (otrosSeleccionado && _otroController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Especifique la otra causa')),
+              );
+              return;
+            }
 
-            Navigator.pop(context);
+            // Construir la descripción
+            final causas = _causasSeleccionadas.toList();
+            
+            // Si "Otros" está seleccionado, reemplazarlo con el texto ingresado
+            if (otrosSeleccionado) {
+              causas.remove('Otros');
+              causas.add('Otros: ${_otroController.text.trim()}');
+            }
+            
+            Navigator.pop(context, {
+              'cantidad_kg': cantidad,
+              'descripcion': causas.join(', '),
+            });
           },
           child: const Text('Agregar'),
         ),
@@ -1463,9 +1724,7 @@ class _DialogReprocesoState extends State<_DialogReproceso> {
 }
 
 class _DialogMerma extends StatefulWidget {
-  final Function(Map<String, dynamic>) onAgregar;
-
-  const _DialogMerma({required this.onAgregar});
+  const _DialogMerma();
 
   @override
   State<_DialogMerma> createState() => _DialogMermaState();
@@ -1473,46 +1732,84 @@ class _DialogMerma extends StatefulWidget {
 
 class _DialogMermaState extends State<_DialogMerma> {
   final _cantidadController = TextEditingController();
-  final _descripcionController = TextEditingController();
+  final _otroController = TextEditingController();
+  final List<String> _causasDisponibles = [
+    'Desperdicio de proceso',
+    'Producto no conforme',
+    'Limpieza de equipos',
+    'Calibración de máquinas',
+    'Cambio de formato',
+    'Residuos de producción',
+    'Otros',
+  ];
+  final Set<String> _causasSeleccionadas = {};
 
   @override
   void dispose() {
     _cantidadController.dispose();
-    _descripcionController.dispose();
+    _otroController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool otrosSeleccionado = _causasSeleccionadas.contains('Otros');
+    
     return AlertDialog(
-      title: const Row(
-        children: [
-          Icon(Icons.delete_outline, color: Colors.red),
-          SizedBox(width: 8),
-          Expanded(child: Text('Agregar Merma')),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextFormField(
-            controller: _cantidadController,
-            decoration: const InputDecoration(
-              labelText: 'Cantidad (kg)',
-              border: OutlineInputBorder(),
+      title: const Text('Agregar Merma'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _cantidadController,
+              decoration: const InputDecoration(
+                labelText: 'Cantidad (kg)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _descripcionController,
-            decoration: const InputDecoration(
-              labelText: 'Descripción',
-              border: OutlineInputBorder(),
+            const SizedBox(height: 16),
+            const Text(
+              'Causas de la merma:',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            maxLines: 3,
-          ),
-        ],
+            const SizedBox(height: 8),
+            ..._causasDisponibles.map((causa) => CheckboxListTile(
+              title: Text(causa),
+              value: _causasSeleccionadas.contains(causa),
+              onChanged: (value) {
+                setState(() {
+                  if (value == true) {
+                    _causasSeleccionadas.add(causa);
+                  } else {
+                    _causasSeleccionadas.remove(causa);
+                    // Si deselecciona "Otros", limpiar el campo
+                    if (causa == 'Otros') {
+                      _otroController.clear();
+                    }
+                  }
+                });
+              },
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            )),
+            // Campo de texto que aparece solo si "Otros" está seleccionado
+            if (otrosSeleccionado) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _otroController,
+                decoration: const InputDecoration(
+                  labelText: 'Especifique otra causa',
+                  border: OutlineInputBorder(),
+                  hintText: 'Describa la causa',
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -1521,23 +1818,42 @@ class _DialogMermaState extends State<_DialogMerma> {
         ),
         ElevatedButton(
           onPressed: () {
-            if (_cantidadController.text.isEmpty || 
-                _descripcionController.text.isEmpty) {
+            final cantidad = double.tryParse(_cantidadController.text);
+            if (cantidad == null || cantidad <= 0) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Completa todos los campos'),
-                  backgroundColor: Colors.red,
-                ),
+                const SnackBar(content: Text('Ingrese una cantidad válida')),
+              );
+              return;
+            }
+            
+            if (_causasSeleccionadas.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Seleccione al menos una causa')),
               );
               return;
             }
 
-            widget.onAgregar({
-              'cantidad_kg': double.parse(_cantidadController.text),
-              'descripcion': _descripcionController.text,
-            });
+            // Validar que si seleccionó "Otros", haya escrito algo
+            if (otrosSeleccionado && _otroController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Especifique la otra causa')),
+              );
+              return;
+            }
 
-            Navigator.pop(context);
+            // Construir la descripción
+            final causas = _causasSeleccionadas.toList();
+            
+            // Si "Otros" está seleccionado, reemplazarlo con el texto ingresado
+            if (otrosSeleccionado) {
+              causas.remove('Otros');
+              causas.add('Otros: ${_otroController.text.trim()}');
+            }
+            
+            Navigator.pop(context, {
+              'cantidad_kg': cantidad,
+              'descripcion': causas.join(', '),
+            });
           },
           child: const Text('Agregar'),
         ),

@@ -617,16 +617,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Firmas de Supervisor'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _cargarTrazabilidades,
-            tooltip: 'Actualizar',
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: _cargarTrazabilidades,
         child: Column(

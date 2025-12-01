@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.core.exceptions import ValidationError
 from datetime import date
 import openpyxl
+from django.db import transaction
 
 from .models import (
     Usuario, Linea, Turno, Colaborador,
@@ -798,6 +799,233 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED, 
             headers=headers
         )
+    
+    @action(detail=True, methods=['patch'], url_path='actualizar-completa')
+    def actualizar_completa(self, request, pk=None):
+        """
+        Actualizar todos los campos de una trazabilidad:
+        - cantidad_producida
+        - observaciones
+        - materias_primas (lotes y cantidades)
+        - reprocesos
+        - mermas
+        - colaboradores
+        """
+        trazabilidad = self.get_object()
+        
+        # Verificar que no esté firmada por supervisor
+        if trazabilidad.firmas.filter(tipo_firma='supervisor').exists():
+            return Response(
+                {'error': 'No se puede editar una trazabilidad ya firmada por el supervisor'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            with transaction.atomic():
+                # 1. Actualizar cantidad producida y observaciones
+                cantidad_producida = request.data.get('cantidad_producida')
+                if cantidad_producida is not None:
+                    trazabilidad.cantidad_producida = cantidad_producida
+                
+                observaciones = request.data.get('observaciones')
+                if observaciones is not None:
+                    trazabilidad.observaciones = observaciones
+                
+                trazabilidad.save()
+                
+                # 2. Actualizar materias primas
+                materias_primas_data = request.data.get('materias_primas')
+                if materias_primas_data is not None:
+                    # Eliminar las existentes
+                    trazabilidad.materias_primas_usadas.all().delete()
+                    
+                    # Crear las nuevas
+                    for mp_data in materias_primas_data:
+                        from .models import MateriaPrima, TrazabilidadMateriaPrima
+                        
+                        materia_prima = MateriaPrima.objects.get(
+                            codigo=mp_data['materia_prima_id']
+                        )
+                        
+                        TrazabilidadMateriaPrima.objects.create(
+                            trazabilidad=trazabilidad,
+                            materia_prima=materia_prima,
+                            lote=mp_data.get('lote'),
+                            cantidad_usada=mp_data['cantidad_usada'],
+                            unidad_medida=mp_data.get('unidad_medida', 'kg')
+                        )
+                
+                # 3. Actualizar reprocesos
+                reprocesos_data = request.data.get('reprocesos_data')
+                if reprocesos_data is not None:
+                    # Eliminar los existentes
+                    trazabilidad.reprocesos.all().delete()
+                    
+                    # Crear los nuevos
+                    for reproceso_data in reprocesos_data:
+                        from .models import Reproceso
+                        
+                        Reproceso.objects.create(
+                            trazabilidad=trazabilidad,
+                            cantidad_kg=reproceso_data['cantidad_kg'],
+                            descripcion=reproceso_data.get('descripcion', '')
+                        )
+                
+                # 4. Actualizar mermas
+                mermas_data = request.data.get('mermas_data')
+                if mermas_data is not None:
+                    # Eliminar las existentes
+                    trazabilidad.mermas.all().delete()
+                    
+                    # Crear las nuevas
+                    for merma_data in mermas_data:
+                        from .models import Merma
+                        
+                        Merma.objects.create(
+                            trazabilidad=trazabilidad,
+                            cantidad_kg=merma_data['cantidad_kg'],
+                            descripcion=merma_data.get('descripcion', '')
+                        )
+                
+                # 5. Actualizar colaboradores
+                colaboradores_codigos = request.data.get('colaboradores_codigos')
+                if colaboradores_codigos is not None:
+                    # Limpiar relación
+                    trazabilidad.colaboradores_reales.clear()
+                    
+                    # Agregar los nuevos
+                    from .models import Colaborador
+                    
+                    for codigo in colaboradores_codigos:
+                        colaborador = Colaborador.objects.get(codigo=codigo)
+                        trazabilidad.colaboradores_reales.add(colaborador)
+                
+                # Retornar la trazabilidad actualizada
+                serializer = self.get_serializer(trazabilidad)
+                return Response(serializer.data)
+                
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    def update(self, request, *args, **kwargs):
+        """
+        Actualizar trazabilidad completa (para uso con PATCH normal)
+        """
+        trazabilidad = self.get_object()
+        
+        # Verificar que no esté firmada por supervisor
+        if trazabilidad.firmas.filter(tipo_firma='supervisor').exists():
+            return Response(
+                {'error': 'No se puede editar una trazabilidad ya firmada por el supervisor'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            with transaction.atomic():
+                print('📝 Actualizando trazabilidad...')
+                
+                # Actualizar campos básicos
+                if 'cantidad_producida' in request.data:
+                    trazabilidad.cantidad_producida = request.data['cantidad_producida']
+                    print(f'✅ Cantidad producida: {trazabilidad.cantidad_producida}')
+                
+                if 'observaciones' in request.data:
+                    trazabilidad.observaciones = request.data['observaciones']
+                    print(f'✅ Observaciones: {trazabilidad.observaciones}')
+                
+                trazabilidad.save()
+                
+                # Actualizar materias primas
+                if 'materias_primas' in request.data:
+                    print(f'🧪 Actualizando materias primas: {len(request.data["materias_primas"])}')
+                    from .models import MateriaPrima, TrazabilidadMateriaPrima
+                    
+                    # Eliminar las existentes
+                    trazabilidad.materias_primas_usadas.all().delete()
+                    
+                    # Crear las nuevas
+                    for mp_data in request.data['materias_primas']:
+                        materia_prima = MateriaPrima.objects.get(
+                            codigo=mp_data['materia_prima_id']
+                        )
+                        
+                        TrazabilidadMateriaPrima.objects.create(
+                            trazabilidad=trazabilidad,
+                            materia_prima=materia_prima,
+                            lote=mp_data.get('lote'),
+                            cantidad_usada=mp_data['cantidad_usada'],
+                            unidad_medida=mp_data.get('unidad_medida', 'kg')
+                        )
+                        print(f'  ✅ MP: {materia_prima.nombre} - {mp_data["cantidad_usada"]}')
+                
+                # Actualizar reprocesos
+                if 'reprocesos_data' in request.data:
+                    print(f'♻️ Actualizando reprocesos: {len(request.data["reprocesos_data"])}')
+                    from .models import Reproceso
+                    
+                    # Eliminar los existentes
+                    trazabilidad.reprocesos.all().delete()
+                    
+                    # Crear los nuevos
+                    for reproceso_data in request.data['reprocesos_data']:
+                        Reproceso.objects.create(
+                            trazabilidad=trazabilidad,
+                            cantidad_kg=reproceso_data['cantidad_kg'],
+                            descripcion=reproceso_data.get('descripcion', '')
+                        )
+                        print(f'  ✅ Reproceso: {reproceso_data["cantidad_kg"]} kg')
+                
+                # Actualizar mermas
+                if 'mermas_data' in request.data:
+                    print(f'🗑️ Actualizando mermas: {len(request.data["mermas_data"])}')
+                    from .models import Merma
+                    
+                    # Eliminar las existentes
+                    trazabilidad.mermas.all().delete()
+                    
+                    # Crear las nuevas
+                    for merma_data in request.data['mermas_data']:
+                        Merma.objects.create(
+                            trazabilidad=trazabilidad,
+                            cantidad_kg=merma_data['cantidad_kg'],
+                            descripcion=merma_data.get('descripcion', '')
+                        )
+                        print(f'  ✅ Merma: {merma_data["cantidad_kg"]} kg')
+                
+                # Actualizar colaboradores - VERSIÓN CORREGIDA
+                if 'colaboradores_codigos' in request.data:
+                    print(f'👷 Actualizando colaboradores: {len(request.data["colaboradores_codigos"])}')
+                    from .models import Colaborador, TrazabilidadColaborador
+                    
+                    # Eliminar colaboradores existentes usando el modelo intermedio
+                    TrazabilidadColaborador.objects.filter(trazabilidad=trazabilidad).delete()
+                    print('  🗑️ Colaboradores existentes eliminados')
+                    
+                    # Agregar los nuevos colaboradores
+                    for codigo in request.data['colaboradores_codigos']:
+                        colaborador = Colaborador.objects.get(codigo=codigo)
+                        TrazabilidadColaborador.objects.create(
+                            trazabilidad=trazabilidad,
+                            colaborador=colaborador
+                        )
+                        print(f'  ✅ Colaborador agregado: {colaborador.nombre} {colaborador.apellido}')
+                
+                print('✅ Trazabilidad actualizada exitosamente')
+                
+                # Retornar la trazabilidad actualizada
+                serializer = self.get_serializer(trazabilidad)
+                return Response(serializer.data)
+                
+        except Exception as e:
+            import traceback
+            print('❌ ERROR en update trazabilidad:')
+            print(traceback.format_exc())
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 # ============================================================================
 # VIEWSET: Firmas de Trazabilidad

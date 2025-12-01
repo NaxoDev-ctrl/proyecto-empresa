@@ -1,9 +1,11 @@
 // ============================================================================
-// PANTALLA: Detalle de Trazabilidad para Supervisor
-// Permite ver, editar y firmar trazabilidades
+// PANTALLA: Detalle de Trazabilidad para Supervisor - VERSIÓN CORREGIDA
 // ============================================================================
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
 
 import '../services/api_service.dart';
 
@@ -29,11 +31,28 @@ class _DetalleTrazabilidadSupervisorScreenState
   String? _error;
   bool _modoEdicion = false;
 
-  // ========== CONTROLLERS PARA EDICIÓN ==========
-  final TextEditingController _cantidadProducidaController =
-      TextEditingController();
-  final TextEditingController _observacionesController =
-      TextEditingController();
+  // ========== DATOS ORIGINALES (para revertir cambios) ==========
+  Map<String, Map<String, dynamic>> _materiasPrimasOriginales = {};
+  List<Map<String, dynamic>> _reprocesosOriginales = [];
+  List<Map<String, dynamic>> _mermasOriginales = [];
+  List<Map<String, dynamic>> _colaboradoresOriginales = [];
+  String _cantidadProducidaOriginal = '';
+  String _observacionesOriginal = '';
+
+  // ========== DATOS PARA EDICIÓN ==========
+  final TextEditingController _cantidadProducidaController = TextEditingController();
+  final TextEditingController _observacionesController = TextEditingController();
+  
+  // Materias primas: Map<materia_prima_id, Map<lote, cantidad, unidad>>
+  Map<String, Map<String, dynamic>> _materiasPrimasEditadas = {};
+  
+  // Reprocesos y mermas
+  List<Map<String, dynamic>> _reprocesosEditados = [];
+  List<Map<String, dynamic>> _mermasEditadas = [];
+  
+  // Colaboradores
+  List<Map<String, dynamic>> _colaboradoresSeleccionados = [];
+  List<Map<String, dynamic>> _todosColaboradores = [];
 
   final ApiService _apiService = ApiService();
 
@@ -58,19 +77,110 @@ class _DetalleTrazabilidadSupervisorScreenState
     });
 
     try {
+      print('🔍 Cargando trazabilidad ${widget.trazabilidadId}...');
+      
       final data = await _apiService.getTrazabilidadDetalle(widget.trazabilidadId);
-
-      print('🔍 DATOS DE TRAZABILIDAD RECIBIDOS:');
-      print('Tipo: ${data.runtimeType}');
-      print('Contenido completo: $data');
-      print('hoja_procesos tipo: ${data['hoja_procesos'].runtimeType}');
-      print('hoja_procesos valor: ${data['hoja_procesos']}');
+      print('📦 Datos recibidos: ${data.toString()}');
+      
+      // Cargar todos los colaboradores disponibles
+      final todosColabs = await _apiService.getColaboradores();
+      print('👥 Colaboradores disponibles: ${todosColabs.length}');
 
       setState(() {
         _trazabilidad = data;
-        _cantidadProducidaController.text =
-            data['cantidad_producida']?.toString() ?? '';
-        _observacionesController.text = data['observaciones'] ?? '';
+        
+        // ========== INICIALIZAR DATOS ORIGINALES ==========
+        _cantidadProducidaOriginal = data['cantidad_producida']?.toString() ?? '';
+        _observacionesOriginal = data['observaciones'] ?? '';
+        
+        // Inicializar controllers
+        _cantidadProducidaController.text = _cantidadProducidaOriginal;
+        _observacionesController.text = _observacionesOriginal;
+        
+        // ========== MATERIAS PRIMAS ORIGINALES ==========
+        _materiasPrimasOriginales.clear();
+        _materiasPrimasEditadas.clear();
+        
+        final mpUsadas = data['materias_primas_usadas'] as List? ?? [];
+        print('🧪 Materias primas usadas: ${mpUsadas.length}');
+        
+        for (var mp in mpUsadas) {
+          final mpDetalle = mp['materia_prima_detalle'] ?? mp['materia_prima'];
+          final codigo = mpDetalle['codigo'].toString();
+          
+          final mpData = {
+            'id': mp['id'],
+            'materia_prima_id': codigo,
+            'nombre': mpDetalle['nombre'],
+            'lote': mp['lote'] ?? '',
+            'cantidad_usada': mp['cantidad_usada']?.toString() ?? '',
+            'unidad_medida': mp['unidad_medida'] ?? 'kg',
+            'requiere_lote': mpDetalle['requiere_lote'] ?? false,
+          };
+          
+          _materiasPrimasOriginales[codigo] = Map<String, dynamic>.from(mpData);
+          _materiasPrimasEditadas[codigo] = Map<String, dynamic>.from(mpData);
+        }
+        
+        // ========== REPROCESOS ORIGINALES ==========
+        final reprocesos = data['reprocesos'] as List? ?? [];
+        print('♻️ Reprocesos: ${reprocesos.length}');
+        
+        _reprocesosOriginales = reprocesos.map((r) => Map<String, dynamic>.from(r)).toList();
+        _reprocesosEditados = reprocesos.map((r) => Map<String, dynamic>.from(r)).toList();
+        
+        // ========== MERMAS ORIGINALES ==========
+        final mermas = data['mermas'] as List? ?? [];
+        print('🗑️ Mermas: ${mermas.length}');
+        
+        _mermasOriginales = mermas.map((m) => Map<String, dynamic>.from(m)).toList();
+        _mermasEditadas = mermas.map((m) => Map<String, dynamic>.from(m)).toList();
+        
+        // ========== COLABORADORES ORIGINALES ==========
+        final colaboradoresReales = data['colaboradores_reales'] as List? ?? [];
+        print('👷 Colaboradores en trazabilidad: ${colaboradoresReales.length}');
+        print('📋 Datos colaboradores: $colaboradoresReales');
+        
+        _colaboradoresOriginales = colaboradoresReales.map<Map<String, dynamic>>((c) {
+          // Extraer datos del colaborador
+          final colaborador = c is Map && c.containsKey('colaborador') 
+              ? c['colaborador'] 
+              : c;
+          
+          if (colaborador == null || colaborador is! Map) {
+            print('⚠️ Colaborador inválido: $c');
+            return <String, dynamic>{};
+          }
+          
+          final codigo = colaborador['codigo'];
+          final codigoInt = codigo is int ? codigo : int.tryParse(codigo.toString()) ?? 0;
+          
+          return {
+            'codigo': codigoInt,
+            'nombre': colaborador['nombre']?.toString() ?? '',
+            'apellido': colaborador['apellido']?.toString() ?? '',
+          };
+        }).where((c) => c.isNotEmpty).toList();
+        
+        _colaboradoresSeleccionados = _colaboradoresOriginales.map(
+          (c) => Map<String, dynamic>.from(c)
+        ).toList();
+        
+        print('✅ Colaboradores cargados: $_colaboradoresSeleccionados');
+        
+        // Guardar todos los colaboradores disponibles
+        _todosColaboradores = todosColabs.map<Map<String, dynamic>>((c) {
+          final codigo = c['codigo'];
+          final codigoInt = codigo is int ? codigo : int.tryParse(codigo.toString()) ?? 0;
+          
+          return {
+            'codigo': codigoInt,
+            'nombre': c['nombre']?.toString() ?? '',
+            'apellido': c['apellido']?.toString() ?? '',
+          };
+        }).toList();
+        
+        print('✅ Total colaboradores disponibles: ${_todosColaboradores.length}');
       });
     } catch (e) {
       print('❌ ERROR al cargar trazabilidad: $e');
@@ -84,18 +194,73 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
   }
 
+  // ========== CANCELAR EDICIÓN (REVERTIR CAMBIOS) ==========
+  void _cancelarEdicion() {
+    setState(() {
+      // Revertir controllers
+      _cantidadProducidaController.text = _cantidadProducidaOriginal;
+      _observacionesController.text = _observacionesOriginal;
+      
+      // Revertir materias primas
+      _materiasPrimasEditadas.clear();
+      for (var entry in _materiasPrimasOriginales.entries) {
+        _materiasPrimasEditadas[entry.key] = Map<String, dynamic>.from(entry.value);
+      }
+      
+      // Revertir reprocesos
+      _reprocesosEditados = _reprocesosOriginales.map(
+        (r) => Map<String, dynamic>.from(r)
+      ).toList();
+      
+      // Revertir mermas
+      _mermasEditadas = _mermasOriginales.map(
+        (m) => Map<String, dynamic>.from(m)
+      ).toList();
+      
+      // Revertir colaboradores
+      _colaboradoresSeleccionados = _colaboradoresOriginales.map(
+        (c) => Map<String, dynamic>.from(c)
+      ).toList();
+      
+      // Salir del modo edición
+      _modoEdicion = false;
+    });
+    
+    print('↩️ Cambios revertidos');
+  }
+
   // ========== GUARDAR CAMBIOS ==========
   Future<void> _guardarCambios() async {
+    print('💾 Iniciando guardado de cambios...');
+    
     // Validar cantidad producida
-    final cantidadProducida = double.tryParse(_cantidadProducidaController.text);
+    final cantidadProducida = int.tryParse(_cantidadProducidaController.text);
     if (cantidadProducida == null || cantidadProducida <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('La cantidad producida debe ser un número válido mayor a 0'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _mostrarError('La cantidad producida debe ser un número válido mayor a 0');
       return;
+    }
+
+    // Validar que haya al menos un colaborador
+    if (_colaboradoresSeleccionados.isEmpty) {
+      _mostrarError('Debe haber al menos un colaborador asignado');
+      return;
+    }
+
+    // Validar materias primas
+    for (var mp in _materiasPrimasEditadas.values) {
+      final cantidadStr = mp['cantidad_usada'].toString().trim();
+      if (cantidadStr.isEmpty || double.tryParse(cantidadStr) == null) {
+        _mostrarError('Completa todas las cantidades de materias primas');
+        return;
+      }
+      
+      if (mp['requiere_lote'] == true) {
+        final lote = mp['lote']?.toString().trim() ?? '';
+        if (lote.isEmpty) {
+          _mostrarError('${mp['nombre']} requiere lote');
+          return;
+        }
+      }
     }
 
     setState(() {
@@ -103,11 +268,39 @@ class _DetalleTrazabilidadSupervisorScreenState
     });
 
     try {
+      // Preparar datos para enviar
       final body = {
-        'cantidad_producida': cantidadProducida.toInt(),
+        'cantidad_producida': cantidadProducida,
         'observaciones': _observacionesController.text.trim(),
+        'materias_primas': _materiasPrimasEditadas.values.map((mp) {
+          final lote = mp['lote']?.toString().trim() ?? '';
+          return {
+            'materia_prima_id': mp['materia_prima_id'],
+            'lote': lote.isEmpty ? null : lote,
+            'cantidad_usada': double.parse(mp['cantidad_usada'].toString()),
+            'unidad_medida': mp['unidad_medida'],
+          };
+        }).toList(),
+        'reprocesos_data': _reprocesosEditados.map((r) => {
+          'cantidad_kg': r['cantidad_kg'] is double 
+              ? r['cantidad_kg'] 
+              : double.parse(r['cantidad_kg'].toString()),
+          'descripcion': r['descripcion']?.toString() ?? '',
+        }).toList(),
+        'mermas_data': _mermasEditadas.map((m) => {
+          'cantidad_kg': m['cantidad_kg'] is double 
+              ? m['cantidad_kg'] 
+              : double.parse(m['cantidad_kg'].toString()),
+          'descripcion': m['descripcion']?.toString() ?? '',
+        }).toList(),
+        'colaboradores_codigos': _colaboradoresSeleccionados
+            .map((c) => c['codigo'] as int)
+            .toList(),
       };
 
+      print('📤 Datos a enviar: $body');
+
+      // Enviar actualización
       await _apiService.updateTrazabilidad(widget.trazabilidadId, body);
 
       if (mounted) {
@@ -118,20 +311,18 @@ class _DetalleTrazabilidadSupervisorScreenState
           ),
         );
 
+        // Salir del modo edición
         setState(() {
           _modoEdicion = false;
         });
 
+        // Recargar datos del servidor
         await _cargarTrazabilidad();
       }
     } catch (e) {
+      print('❌ ERROR al guardar: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _mostrarError('Error al guardar: $e');
       }
     } finally {
       if (mounted) {
@@ -142,9 +333,81 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
   }
 
+  // ========== AGREGAR/ELIMINAR REPROCESO ==========
+  void _agregarReproceso() {
+    showDialog(
+      context: context,
+      builder: (context) => _DialogReproceso(
+        onAgregar: (reproceso) {
+          setState(() {
+            _reprocesosEditados.add(reproceso);
+          });
+        },
+      ),
+    );
+  }
+
+  void _eliminarReproceso(int index) {
+    setState(() {
+      _reprocesosEditados.removeAt(index);
+    });
+  }
+
+  // ========== AGREGAR/ELIMINAR MERMA ==========
+  void _agregarMerma() {
+    showDialog(
+      context: context,
+      builder: (context) => _DialogMerma(
+        onAgregar: (merma) {
+          setState(() {
+            _mermasEditadas.add(merma);
+          });
+        },
+      ),
+    );
+  }
+
+  void _eliminarMerma(int index) {
+    setState(() {
+      _mermasEditadas.removeAt(index);
+    });
+  }
+
+  // ========== AGREGAR/ELIMINAR COLABORADOR ==========
+  Future<void> _agregarColaborador() async {
+    final colaboradoresDisponibles = _todosColaboradores.where((colab) {
+      return !_colaboradoresSeleccionados.any(
+        (sel) => sel['codigo'] == colab['codigo']
+      );
+    }).toList();
+    
+    if (colaboradoresDisponibles.isEmpty) {
+      _mostrarError('No hay más colaboradores disponibles');
+      return;
+    }
+    
+    final colaboradorSeleccionado = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _DialogSeleccionarColaborador(
+        colaboradores: colaboradoresDisponibles,
+      ),
+    );
+    
+    if (colaboradorSeleccionado != null) {
+      setState(() {
+        _colaboradoresSeleccionados.add(colaboradorSeleccionado);
+      });
+    }
+  }
+
+  void _eliminarColaborador(int index) {
+    setState(() {
+      _colaboradoresSeleccionados.removeAt(index);
+    });
+  }
+
   // ========== FIRMAR TRAZABILIDAD ==========
   Future<void> _firmarTrazabilidad() async {
-    // Confirmar acción
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -191,12 +454,7 @@ class _DetalleTrazabilidadSupervisorScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al firmar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _mostrarError('Error al firmar: $e');
       }
     } finally {
       if (mounted) {
@@ -207,9 +465,17 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
   }
 
+  void _mostrarError(String mensaje) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
   // ========== UI: INFORMACIÓN DE LA TAREA ==========
   Widget _buildSeccionTarea() {
-    // Verificar que existan los datos
     final hojaProcesos = _trazabilidad!['hoja_procesos_detalle'];
     if (hojaProcesos == null || hojaProcesos is! Map<String, dynamic>) {
       return const SizedBox.shrink();
@@ -253,7 +519,10 @@ class _DetalleTrazabilidadSupervisorScreenState
             _buildInfoRow('Código', producto['codigo']?.toString() ?? ''),
             _buildInfoRow('Línea', linea['nombre']?.toString() ?? ''),
             _buildInfoRow('Turno', turno['nombre']?.toString() ?? ''),
-            _buildInfoRow('Fecha', fecha != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(fecha)) : ''),
+            _buildInfoRow(
+              'Fecha', 
+              fecha != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(fecha)) : ''
+            ),
             _buildInfoRow(
               'Fecha Creación',
               DateFormat('dd/MM/yyyy HH:mm').format(
@@ -295,9 +564,13 @@ class _DetalleTrazabilidadSupervisorScreenState
                   IconButton(
                     icon: Icon(_modoEdicion ? Icons.close : Icons.edit),
                     onPressed: () {
-                      setState(() {
-                        _modoEdicion = !_modoEdicion;
-                      });
+                      if (_modoEdicion) {
+                        _cancelarEdicion();
+                      } else {
+                        setState(() {
+                          _modoEdicion = true;
+                        });
+                      }
                     },
                     tooltip: _modoEdicion ? 'Cancelar' : 'Editar',
                   ),
@@ -358,31 +631,6 @@ class _DetalleTrazabilidadSupervisorScreenState
                   ),
                 ],
               ),
-
-            // Botón Guardar (solo en modo edición)
-            if (_modoEdicion) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isSaving ? null : _guardarCambios,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.save),
-                  label: Text(_isSaving ? 'Guardando...' : 'Guardar Cambios'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.all(16),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -391,12 +639,6 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   // ========== UI: MATERIAS PRIMAS ==========
   Widget _buildSeccionMateriasPrimas() {
-    final materiasPrimas = _trazabilidad!['materias_primas_usadas'] as List;
-
-    if (materiasPrimas.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
@@ -413,38 +655,184 @@ class _DetalleTrazabilidadSupervisorScreenState
               ),
             ),
             const Divider(),
-            ...materiasPrimas.map((mp) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            mp['materia_prima']['nombre'],
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          Text(
-                            'Lote: ${mp['lote']}',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        '${mp['cantidad_usada_kg']} kg',
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                        textAlign: TextAlign.right,
-                      ),
-                    ),
-                  ],
+            if (_materiasPrimasEditadas.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No hay materias primas registradas'),
                 ),
-              );
-            }).toList(),
+              )
+            else
+              ..._materiasPrimasEditadas.values.map((mp) {
+                return _buildMateriaPrimaItem(mp);
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMateriaPrimaItem(Map<String, dynamic> mp) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+        color: _modoEdicion ? Colors.blue.shade50 : Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            mp['nombre'],
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          
+          // Lote
+          if (mp['requiere_lote']) ...[
+            if (_modoEdicion)
+              TextFormField(
+                initialValue: mp['lote'],
+                decoration: const InputDecoration(
+                  labelText: 'Lote',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (value) {
+                  mp['lote'] = value;
+                },
+              )
+            else
+              Text('Lote: ${mp['lote']}'),
+            const SizedBox(height: 8),
+          ],
+          
+          // Cantidad
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: _modoEdicion
+                    ? TextFormField(
+                        initialValue: mp['cantidad_usada'].toString(),
+                        decoration: const InputDecoration(
+                          labelText: 'Cantidad',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (value) {
+                          mp['cantidad_usada'] = value;
+                        },
+                      )
+                    : Text('Cantidad: ${mp['cantidad_usada']} ${mp['unidad_medida']}'),
+              ),
+              if (_modoEdicion) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<String>(
+                    value: mp['unidad_medida'],
+                    decoration: const InputDecoration(
+                      labelText: 'Unidad',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'kg', child: Text('kg')),
+                      DropdownMenuItem(value: 'unidades', child: Text('unidades')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        mp['unidad_medida'] = value!;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ========== UI: COLABORADORES ==========
+  Widget _buildSeccionColaboradores() {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Colaboradores (${_colaboradoresSeleccionados.length})',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                ),
+                if (_modoEdicion)
+                  IconButton(
+                    icon: const Icon(Icons.person_add),
+                    onPressed: _agregarColaborador,
+                    tooltip: 'Agregar',
+                  ),
+              ],
+            ),
+            const Divider(),
+            if (_colaboradoresSeleccionados.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No hay colaboradores asignados'),
+                ),
+              )
+            else
+              ..._colaboradoresSeleccionados.asMap().entries.map((entry) {
+                final index = entry.key;
+                final colab = entry.value;
+                final nombreCompleto = '${colab['nombre']} ${colab['apellido']}';
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                    color: _modoEdicion ? Colors.indigo.shade50 : Colors.white,
+                  ),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.indigo,
+                      child: Text(
+                        colab['nombre'].toString()[0].toUpperCase(),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    title: Text(
+                      nombreCompleto,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text('Código: ${colab['codigo']}'),
+                    trailing: _modoEdicion
+                        ? IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _eliminarColaborador(index),
+                          )
+                        : null,
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -453,12 +841,6 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   // ========== UI: REPROCESOS ==========
   Widget _buildSeccionReprocesos() {
-    final reprocesos = _trazabilidad!['reprocesos'] as List;
-
-    if (reprocesos.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
@@ -470,50 +852,74 @@ class _DetalleTrazabilidadSupervisorScreenState
               children: [
                 const Icon(Icons.loop, color: Colors.orange),
                 const SizedBox(width: 8),
-                Text(
-                  'Reprocesos (${reprocesos.length})',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange[700],
+                Expanded(
+                  child: Text(
+                    'Reprocesos (${_reprocesosEditados.length})',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange[700],
+                    ),
                   ),
                 ),
+                if (_modoEdicion)
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _agregarReproceso,
+                    tooltip: 'Agregar',
+                  ),
               ],
             ),
             const Divider(),
-            ...reprocesos.map((reproceso) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange[200]!),
+            if (_reprocesosEditados.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No hay reprocesos registrados'),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${reproceso['cantidad_kg']} kg',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+              )
+            else
+              ..._reprocesosEditados.asMap().entries.map((entry) {
+                final index = entry.key;
+                final reproceso = entry.value;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${reproceso['cantidad_kg']} kg',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              reproceso['descripcion'] ?? 'Sin descripción',
+                              style: TextStyle(color: Colors.grey[700]),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      reproceso['descripcion'] ?? 'Sin descripción',
-                      style: TextStyle(color: Colors.grey[700]),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
+                      ),
+                      if (_modoEdicion)
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _eliminarReproceso(index),
+                        ),
+                    ],
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -522,12 +928,6 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   // ========== UI: MERMAS ==========
   Widget _buildSeccionMermas() {
-    final mermas = _trazabilidad!['mermas'] as List;
-
-    if (mermas.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
@@ -539,50 +939,74 @@ class _DetalleTrazabilidadSupervisorScreenState
               children: [
                 const Icon(Icons.delete_outline, color: Colors.red),
                 const SizedBox(width: 8),
-                Text(
-                  'Mermas (${mermas.length})',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red[700],
+                Expanded(
+                  child: Text(
+                    'Mermas (${_mermasEditadas.length})',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red[700],
+                    ),
                   ),
                 ),
+                if (_modoEdicion)
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _agregarMerma,
+                    tooltip: 'Agregar',
+                  ),
               ],
             ),
             const Divider(),
-            ...mermas.map((merma) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red[200]!),
+            if (_mermasEditadas.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No hay mermas registradas'),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${merma['cantidad_kg']} kg',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+              )
+            else
+              ..._mermasEditadas.asMap().entries.map((entry) {
+                final index = entry.key;
+                final merma = entry.value;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${merma['cantidad_kg']} kg',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              merma['descripcion'] ?? 'Sin descripción',
+                              style: TextStyle(color: Colors.grey[700]),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      merma['descripcion'] ?? 'Sin descripción',
-                      style: TextStyle(color: Colors.grey[700]),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
+                      ),
+                      if (_modoEdicion)
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _eliminarMerma(index),
+                        ),
+                    ],
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -629,14 +1053,10 @@ class _DetalleTrazabilidadSupervisorScreenState
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: esSupervisor
-                        ? Colors.green[50]
-                        : Colors.blue[50],
+                    color: esSupervisor ? Colors.green[50] : Colors.blue[50],
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: esSupervisor
-                          ? Colors.green[200]!
-                          : Colors.blue[200]!,
+                      color: esSupervisor ? Colors.green[200]! : Colors.blue[200]!,
                     ),
                   ),
                   child: Row(
@@ -673,35 +1093,60 @@ class _DetalleTrazabilidadSupervisorScreenState
                     ],
                   ),
                 );
-              }).toList(),
+              }),
 
-            // Botón de firma (solo si no tiene firma de supervisor)
+            // Botón de firma o guardar cambios
             if (!tieneFirmaSupervisor) ...[
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isSaving ? null : _firmarTrazabilidad,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.edit_note),
-                  label: Text(_isSaving ? 'Firmando...' : 'Firmar Trazabilidad'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.all(16),
+              if (_modoEdicion)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _guardarCambios,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save),
+                    label: Text(_isSaving ? 'Guardando...' : 'Guardar Cambios'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _firmarTrazabilidad,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.edit_note),
+                    label: Text(_isSaving ? 'Firmando...' : 'Firmar Trazabilidad'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.all(16),
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 8),
               Text(
-                'Una vez firmada, no podrás modificar esta trazabilidad.',
+                _modoEdicion 
+                    ? 'Los cambios no se guardarán hasta que presiones "Guardar Cambios".'
+                    : 'Una vez firmada, no podrás modificar esta trazabilidad.',
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey[600],
@@ -793,6 +1238,7 @@ class _DetalleTrazabilidadSupervisorScreenState
                         _buildSeccionTarea(),
                         _buildSeccionProduccion(),
                         _buildSeccionMateriasPrimas(),
+                        _buildSeccionColaboradores(),
                         _buildSeccionReprocesos(),
                         _buildSeccionMermas(),
                         _buildSeccionFirmas(),
@@ -801,6 +1247,301 @@ class _DetalleTrazabilidadSupervisorScreenState
                     ),
                   ),
                 ),
+    );
+  }
+}
+
+// ============================================================================
+// DIÁLOGOS (sin cambios)
+// ============================================================================
+
+class _DialogSeleccionarColaborador extends StatefulWidget {
+  final List<Map<String, dynamic>> colaboradores;
+
+  const _DialogSeleccionarColaborador({required this.colaboradores});
+
+  @override
+  State<_DialogSeleccionarColaborador> createState() => 
+      _DialogSeleccionarColaboradorState();
+}
+
+class _DialogSeleccionarColaboradorState 
+    extends State<_DialogSeleccionarColaborador> {
+  
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _colaboradoresFiltrados = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _colaboradoresFiltrados = widget.colaboradores;
+    _searchController.addListener(_filtrarColaboradores);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filtrarColaboradores() {
+    final query = _searchController.text.toLowerCase();
+    
+    setState(() {
+      if (query.isEmpty) {
+        _colaboradoresFiltrados = widget.colaboradores;
+      } else {
+        _colaboradoresFiltrados = widget.colaboradores.where((colab) {
+          final nombreCompleto = 
+              '${colab['nombre']} ${colab['apellido']}'.toLowerCase();
+          final codigoStr = colab['codigo'].toString();
+          
+          return codigoStr.contains(query) || nombreCompleto.contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.person_add, color: Colors.blue),
+          SizedBox(width: 8),
+          Expanded(child: Text('Seleccionar Colaborador')),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar por código o nombre...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => _searchController.clear(),
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            Expanded(
+              child: _colaboradoresFiltrados.isEmpty
+                  ? const Center(
+                      child: Text('No se encontraron colaboradores'),
+                    )
+                  : ListView.builder(
+                      itemCount: _colaboradoresFiltrados.length,
+                      itemBuilder: (context, index) {
+                        final colab = _colaboradoresFiltrados[index];
+                        final nombreCompleto = 
+                            '${colab['nombre']} ${colab['apellido']}';
+                        
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Colors.indigo,
+                              child: Text(
+                                colab['nombre'].toString()[0].toUpperCase(),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                            title: Text(nombreCompleto),
+                            subtitle: Text('Código: ${colab['codigo']}'),
+                            onTap: () => Navigator.pop(context, colab),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogReproceso extends StatefulWidget {
+  final Function(Map<String, dynamic>) onAgregar;
+
+  const _DialogReproceso({required this.onAgregar});
+
+  @override
+  State<_DialogReproceso> createState() => _DialogReprocesoState();
+}
+
+class _DialogReprocesoState extends State<_DialogReproceso> {
+  final _cantidadController = TextEditingController();
+  final _descripcionController = TextEditingController();
+
+  @override
+  void dispose() {
+    _cantidadController.dispose();
+    _descripcionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.loop, color: Colors.orange),
+          SizedBox(width: 8),
+          Expanded(child: Text('Agregar Reproceso')),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextFormField(
+            controller: _cantidadController,
+            decoration: const InputDecoration(
+              labelText: 'Cantidad (kg)',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _descripcionController,
+            decoration: const InputDecoration(
+              labelText: 'Descripción',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 3,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_cantidadController.text.isEmpty || 
+                _descripcionController.text.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Completa todos los campos'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            widget.onAgregar({
+              'cantidad_kg': double.parse(_cantidadController.text),
+              'descripcion': _descripcionController.text,
+            });
+
+            Navigator.pop(context);
+          },
+          child: const Text('Agregar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogMerma extends StatefulWidget {
+  final Function(Map<String, dynamic>) onAgregar;
+
+  const _DialogMerma({required this.onAgregar});
+
+  @override
+  State<_DialogMerma> createState() => _DialogMermaState();
+}
+
+class _DialogMermaState extends State<_DialogMerma> {
+  final _cantidadController = TextEditingController();
+  final _descripcionController = TextEditingController();
+
+  @override
+  void dispose() {
+    _cantidadController.dispose();
+    _descripcionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.delete_outline, color: Colors.red),
+          SizedBox(width: 8),
+          Expanded(child: Text('Agregar Merma')),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextFormField(
+            controller: _cantidadController,
+            decoration: const InputDecoration(
+              labelText: 'Cantidad (kg)',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _descripcionController,
+            decoration: const InputDecoration(
+              labelText: 'Descripción',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 3,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_cantidadController.text.isEmpty || 
+                _descripcionController.text.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Completa todos los campos'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            widget.onAgregar({
+              'cantidad_kg': double.parse(_cantidadController.text),
+              'descripcion': _descripcionController.text,
+            });
+
+            Navigator.pop(context);
+          },
+          child: const Text('Agregar'),
+        ),
+      ],
     );
   }
 }

@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 60),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -232,116 +232,71 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        SizedBox(height: 1),
-
-        // Subtítulo
-        const Text(
-          'Sistema de Trazabilidad',
-          style: TextStyle(
-            fontSize: 16,
-            color: Color.fromARGB(255, 255, 217, 198),
-            letterSpacing: 0.5,
-          ),
-          textAlign: TextAlign.center,
-        ),
+        SizedBox(height: 10),
       ],
     );
   }
 
   Widget _buildOperariosCard() {
     return Padding(
-      padding: const EdgeInsets.all(6),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 400,
-          maxHeight: 400,
+      padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 6),
+      child: Card(
+        elevation: 10,
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: Card(
-            elevation: 12,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SeleccionLineaScreen(),
-                  ),
-                );
-              },
-              borderRadius: BorderRadius.circular(24),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.green.shade50,
-                      Colors.white,
-                    ],
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Ícono grande
-                    Container(
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.factory,
-                        size: 80,
-                        color: Colors.green.shade700,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Título
-                    Text(
-                      'OPERARIOS',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green.shade700,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    
-                    // Subtítulo
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'Registro de Producción',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
-                          letterSpacing: 0.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Flecha
-                    Icon(
-                      Icons.arrow_forward,
-                      size: 32,
-                      color: Colors.green.shade700,
-                    ),
-                  ],
-                ),
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SeleccionLineaScreen(),
               ),
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 80),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Ícono grande
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.factory,
+                    size: 50,
+                    color: Colors.green.shade700,
+                  ),
+                ),
+                
+                const SizedBox(height: 10),
+                
+                // Título
+                Text(
+                  'OPERARIOS',
+                  style: TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                    color: Color.fromARGB(255, 137, 29, 66),
+                    letterSpacing: 2,
+                  ),
+                ),
+                
+                const SizedBox(height: 5),
+          
+                // Flecha
+                Icon(
+                  Icons.arrow_forward,
+                  size: 40,
+                  color: Color.fromARGB(255, 137, 29, 66),
+                ),
+              ],
             ),
           ),
         ),

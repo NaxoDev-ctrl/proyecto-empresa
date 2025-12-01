@@ -971,26 +971,43 @@ class ApiService {
   // Actualizar trazabilidad
   // ========================================================================
   Future<Map<String, dynamic>> updateTrazabilidad(
-    int trazabilidadId,
-    Map<String, dynamic> data,
+    int trazabilidadId, 
+    Map<String, dynamic> data
   ) async {
     try {
+      // Obtener token de SharedPreferences directamente
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      
+      if (token == null) {
+        throw Exception('No hay token de autenticación');
+      }
+      
       final response = await http.patch(
         Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/'),
-        headers: _getHeaders(),
-        body: json.encode(data),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(data),
       );
 
+      print('📤 UPDATE TRAZABILIDAD - Status: ${response.statusCode}');
+      print('📤 UPDATE TRAZABILIDAD - Body enviado: ${jsonEncode(data)}');
+      print('📤 UPDATE TRAZABILIDAD - Response: ${response.body}');
+
       if (response.statusCode == 200) {
-        return json.decode(utf8.decode(response.bodyBytes));
+        return jsonDecode(response.body);
       } else {
-        _handleError(response);
-        throw Exception('Error al actualizar trazabilidad');
+        final errorBody = jsonDecode(response.body);
+        throw Exception(errorBody['error'] ?? 'Error al actualizar trazabilidad');
       }
     } catch (e) {
-      throw Exception('Error de conexión: $e');
+      print('❌ ERROR en updateTrazabilidad: $e');
+      rethrow;
     }
   }
+
 
 
 

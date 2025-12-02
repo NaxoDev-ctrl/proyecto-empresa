@@ -44,6 +44,7 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   Uint8List? _fotoEtiqueta;
   String? _nombreArchivoFoto;
+  String? _fotoEtiquetasUrl;
   
   // Materias primas: Map<materia_prima_id, Map<lote, cantidad, unidad>>
   Map<String, Map<String, dynamic>> _materiasPrimasEditadas = {};
@@ -183,7 +184,18 @@ class _DetalleTrazabilidadSupervisorScreenState
         }).toList();
         
         print('✅ Total colaboradores disponibles: ${_todosColaboradores.length}');
+        // ========== CARGAR FOTO DE ETIQUETAS ==========
+        if (data['foto_etiquetas'] != null && 
+            data['foto_etiquetas'].toString().isNotEmpty) {
+          setState(() {
+            _fotoEtiquetasUrl = data['foto_etiquetas'];
+          });
+          print('📷 Foto etiquetas cargada: $_fotoEtiquetasUrl');
+        } else {
+          print('⚠️ No hay foto de etiquetas guardada');
+        }
       });
+
     } catch (e) {
       print('❌ ERROR al cargar trazabilidad: $e');
       setState(() {
@@ -248,15 +260,18 @@ class _DetalleTrazabilidadSupervisorScreenState
       return;
     }
 
-    if (_fotoEtiqueta == null) {
+    // ========================================================================
+    // VALIDAR FOTO OBLIGATORIA
+    // ========================================================================
+    if (_fotoEtiqueta == null && _fotoEtiquetasUrl == null) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.camera_alt, color: Colors.blue, size: 32),
+              Icon(Icons.camera_alt, color: Colors.red, size: 32),
               SizedBox(width: 12),
-              Text('Falta Foto'),
+              Text('Falta Foto de Etiquetas'),
             ],
           ),
           content: Column(
@@ -264,23 +279,24 @@ class _DetalleTrazabilidadSupervisorScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Debes tomar una foto de las etiquetas utilizadas en la producción.',
+                'La foto de etiquetas es OBLIGATORIA para guardar la trazabilidad.',
                 style: TextStyle(fontSize: 16),
               ),
               SizedBox(height: 16),
               Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info, color: Colors.blue),
+                    Icon(Icons.error, color: Colors.red),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'La foto es obligatoria para la trazabilidad',
+                        'Debes tomar una foto antes de guardar',
                         style: TextStyle(fontSize: 14),
                       ),
                     ),
@@ -301,12 +317,14 @@ class _DetalleTrazabilidadSupervisorScreenState
               },
               icon: Icon(Icons.camera_alt),
               label: Text('Tomar Foto Ahora'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             ),
           ],
         ),
       );
       return;
     }
+
     // Validar materias primas
     for (var mp in _materiasPrimasEditadas.values) {
       final cantidadStr = mp['cantidad_usada'].toString().trim();
@@ -330,7 +348,7 @@ class _DetalleTrazabilidadSupervisorScreenState
 
     try {
       // Preparar datos para enviar
-      final body = {
+      final datos = {
         'cantidad_producida': cantidadProducida,
         'observaciones': _observacionesController.text.trim(),
         'materias_primas': _materiasPrimasEditadas.values.map((mp) {
@@ -359,8 +377,36 @@ class _DetalleTrazabilidadSupervisorScreenState
             .toList(),
       };
 
-      print('📤 Datos a enviar: $body');
+      print('📤 Datos a enviar: $datos');
 
+      // ========================================================================
+      // SIEMPRE ENVIAR CON FOTO (nueva o existente)
+      // ========================================================================
+      List<int>? fotoBytesParaEnviar;
+      String? nombreArchivoParaEnviar;
+
+      if (_fotoEtiqueta != null) {
+        // Hay foto NUEVA cargada en memoria
+        print('📷 Enviando NUEVA foto...');
+        fotoBytesParaEnviar = _fotoEtiqueta;
+        nombreArchivoParaEnviar = _nombreArchivoFoto ?? 
+            'etiqueta_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      } else if (_fotoEtiquetasUrl != null) {
+        // Solo hay URL de foto existente - NO enviar foto (el backend la mantiene)
+        print('📷 Manteniendo foto existente (URL: $_fotoEtiquetasUrl)');
+        fotoBytesParaEnviar = null;
+        nombreArchivoParaEnviar = null;
+      }
+
+      // Llamar al método unificado
+      await _apiService.updateTrazabilidad(
+        widget.trazabilidadId,
+        datos,
+        fotoBytes: fotoBytesParaEnviar,
+        nombreArchivo: nombreArchivoParaEnviar,
+      );
+
+      print('✅ Cambios guardados exitosamente');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -391,7 +437,6 @@ class _DetalleTrazabilidadSupervisorScreenState
       }
     }
   }
-
   // ========== AGREGAR/ELIMINAR REPROCESO ==========
   void _agregarReproceso() async {
     final resultado = await showDialog<Map<String, dynamic>>(
@@ -875,6 +920,9 @@ class _DetalleTrazabilidadSupervisorScreenState
   }
   // UI de seleccionar foto de etiquetas
   Widget _buildFotoEtiquetas() {
+    // Determinar si hay foto (nueva o existente)
+    final bool hayFoto = _fotoEtiqueta != null || _fotoEtiquetasUrl != null;
+    
     return Card(
       child: Padding(
         padding: EdgeInsets.all(16),
@@ -890,7 +938,9 @@ class _DetalleTrazabilidadSupervisorScreenState
               ),
             ),
             const SizedBox(height: 12),
-            if (_fotoEtiqueta == null)
+            
+            if (!hayFoto)
+              // NO HAY FOTO: Mostrar botones para agregar
               Column(
                 children: [
                   Text(
@@ -921,44 +971,111 @@ class _DetalleTrazabilidadSupervisorScreenState
                 ],
               )
             else
+              // HAY FOTO: Mostrar preview
               Column(
                 children: [
+                  // Preview de la imagen
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(
-                      _fotoEtiqueta!,
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
+                    child: _fotoEtiqueta != null
+                        ? Image.memory(
+                            _fotoEtiqueta!,
+                            height: 200,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.network(
+                            _fotoEtiquetasUrl!,
+                            height: 200,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                height: 200,
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                height: 200,
+                                color: Colors.grey[300],
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.error, size: 48, color: Colors.red),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Error al cargar imagen',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _tomarFoto,
-                          icon: Icon(Icons.refresh),
-                          label: Text('Tomar otra'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _fotoEtiqueta = null;
-                            });
-                          },
-                          icon: Icon(Icons.delete, color: Colors.red),
-                          label: Text('Eliminar'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
+                  
+                  // Botones de acción (solo en modo edición)
+                  if (_modoEdicion)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _tomarFoto,
+                            icon: Icon(Icons.refresh),
+                            label: Text('Cambiar Foto'),
                           ),
                         ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _fotoEtiqueta = null;
+                                _fotoEtiquetasUrl = null;
+                              });
+                            },
+                            icon: Icon(Icons.delete, color: Colors.red),
+                            label: Text('Eliminar'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    // Vista de solo lectura
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.shade200),
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Foto de etiquetas guardada',
+                            style: TextStyle(
+                              color: Colors.green.shade900,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
           ],

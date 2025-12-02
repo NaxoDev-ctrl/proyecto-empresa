@@ -997,25 +997,35 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
         return Response({'status': 'Ver terminal de Django para detalles'})
 
     def update(self, request, *args, **kwargs):
-        """Actualizar trazabilidad con soporte para multipart (con foto) y JSON normal"""
+        """
+        Actualizar trazabilidad completa, con soporte para foto
+        """
         trazabilidad = self.get_object()
         
-        print("\n" + "="*80)
-        print("🔵 INICIANDO UPDATE DE TRAZABILIDAD")
-        print("="*80)
-        print(f"📋 Trazabilidad ID: {trazabilidad.id}")
-        print(f"📋 Content-Type: {request.content_type}")
-        print(f"📋 Method: {request.method}")
+        print('\n' + '='*80)
+        print('🔧 INICIANDO UPDATE DE TRAZABILIDAD')
+        print('='*80)
+        print(f'📦 Request data: {request.data}')
+        print(f'📦 Request FILES: {request.FILES}')
+        print(f'📦 Content-Type: {request.content_type}')
         
-        # Detectar si es multipart o JSON
-        es_multipart = 'multipart' in request.content_type
+        # Verificar que no esté firmada por supervisor
+        if trazabilidad.firmas.filter(tipo_firma='supervisor').exists():
+            return Response(
+                {'error': 'No se puede editar una trazabilidad ya firmada por el supervisor'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         try:
             with transaction.atomic():
+                print('📝 Actualizando trazabilidad...')
+                
+                # Determinar si viene como multipart o JSON
+                es_multipart = 'multipart' in request.content_type
+                
                 if es_multipart:
                     print('📷 Request multipart detectado (con foto)')
                     # Parsear campos JSON que vienen como strings
-                    import json
                     try:
                         materias_primas = json.loads(request.data.get('materias_primas', '[]'))
                         reprocesos_data = json.loads(request.data.get('reprocesos_data', '[]'))
@@ -1025,10 +1035,13 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                         print(f'❌ Error al parsear JSON: {e}')
                         raise Exception(f'Error al parsear datos JSON: {e}')
                     
+                    # Obtener campos simples
                     cantidad_producida = request.data.get('cantidad_producida')
                     observaciones = request.data.get('observaciones', '')
+                    
                 else:
                     print('📄 Request JSON normal (sin foto)')
+                    # Datos vienen en request.data como dict
                     materias_primas = request.data.get('materias_primas', [])
                     reprocesos_data = request.data.get('reprocesos_data', [])
                     mermas_data = request.data.get('mermas_data', [])
@@ -1036,82 +1049,109 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                     cantidad_producida = request.data.get('cantidad_producida')
                     observaciones = request.data.get('observaciones', '')
                 
-                print(f"✅ Cantidad producida: {cantidad_producida}")
-                print(f"✅ Colaboradores codigos: {colaboradores_codigos}")
-                print(f"✅ Materias primas: {len(materias_primas)} items")
-                print(f"✅ Reprocesos: {len(reprocesos_data)} items")
-                print(f"✅ Mermas: {len(mermas_data)} items")
-                
-                # Actualizar campos básicos
+                # ==================== CAMPOS BÁSICOS ====================
                 if cantidad_producida is not None:
                     trazabilidad.cantidad_producida = int(cantidad_producida)
+                    print(f'✅ Cantidad producida: {trazabilidad.cantidad_producida}')
                 
                 trazabilidad.observaciones = observaciones
+                print(f'✅ Observaciones: {trazabilidad.observaciones}')
                 
-                # Guardar foto si viene
+                # ==================== FOTO ====================
                 if 'foto_etiquetas' in request.FILES:
                     trazabilidad.foto_etiquetas = request.FILES['foto_etiquetas']
                     print(f'✅ Nueva foto guardada: {trazabilidad.foto_etiquetas.name}')
                 
                 trazabilidad.save()
-                print(f'✅ Trazabilidad guardada: {trazabilidad.id}')
                 
-                # Actualizar materias primas
-                MateriaPrimaUsada.objects.filter(trazabilidad=trazabilidad).delete()
-                for mp_data in materias_primas:
-                    MateriaPrimaUsada.objects.create(
-                        trazabilidad=trazabilidad,
-                        materia_prima_id=mp_data['materia_prima_id'],
-                        lote=mp_data.get('lote'),
-                        cantidad_usada=mp_data['cantidad_usada'],
-                        unidad_medida=mp_data.get('unidad_medida', 'kg')
-                    )
-                print(f'✅ Materias primas actualizadas: {len(materias_primas)}')
+                # ==================== MATERIAS PRIMAS ====================
+                if materias_primas:
+                    print(f'🧪 Actualizando materias primas: {len(materias_primas)}')
+                    from .models import MateriaPrima, TrazabilidadMateriaPrima
+                    
+                    trazabilidad.materias_primas_usadas.all().delete()
+                    
+                    for mp_data in materias_primas:
+                        materia_prima = MateriaPrima.objects.get(
+                            codigo=mp_data['materia_prima_id']
+                        )
+                        
+                        TrazabilidadMateriaPrima.objects.create(
+                            trazabilidad=trazabilidad,
+                            materia_prima=materia_prima,
+                            lote=mp_data.get('lote'),
+                            cantidad_usada=mp_data['cantidad_usada'],
+                            unidad_medida=mp_data.get('unidad_medida', 'kg')
+                        )
+                        print(f'  ✅ MP: {materia_prima.nombre} - {mp_data["cantidad_usada"]}')
                 
-                # Actualizar reprocesos
-                Reproceso.objects.filter(trazabilidad=trazabilidad).delete()
-                for rep_data in reprocesos_data:
-                    Reproceso.objects.create(
-                        trazabilidad=trazabilidad,
-                        cantidad_kg=rep_data['cantidad_kg'],
-                        descripcion=rep_data['descripcion']
-                    )
-                print(f'✅ Reprocesos actualizados: {len(reprocesos_data)}')
+                # ==================== REPROCESOS ====================
+                if reprocesos_data:
+                    print(f'♻️ Actualizando reprocesos: {len(reprocesos_data)}')
+                    from .models import Reproceso
+                    
+                    trazabilidad.reprocesos.all().delete()
+                    
+                    for reproceso_data in reprocesos_data:
+                        Reproceso.objects.create(
+                            trazabilidad=trazabilidad,
+                            cantidad_kg=reproceso_data['cantidad_kg'],
+                            descripcion=reproceso_data.get('descripcion', '')
+                        )
+                        print(f'  ✅ Reproceso: {reproceso_data["cantidad_kg"]} kg')
                 
-                # Actualizar mermas
-                Merma.objects.filter(trazabilidad=trazabilidad).delete()
-                for mer_data in mermas_data:
-                    Merma.objects.create(
-                        trazabilidad=trazabilidad,
-                        cantidad_kg=mer_data['cantidad_kg'],
-                        descripcion=mer_data['descripcion']
-                    )
-                print(f'✅ Mermas actualizadas: {len(mermas_data)}')
+                # ==================== MERMAS ====================
+                if mermas_data:
+                    print(f'🗑️ Actualizando mermas: {len(mermas_data)}')
+                    from .models import Merma
+                    
+                    trazabilidad.mermas.all().delete()
+                    
+                    for merma_data in mermas_data:
+                        Merma.objects.create(
+                            trazabilidad=trazabilidad,
+                            cantidad_kg=merma_data['cantidad_kg'],
+                            descripcion=merma_data.get('descripcion', '')
+                        )
+                        print(f'  ✅ Merma: {merma_data["cantidad_kg"]} kg')
                 
-                # Actualizar colaboradores
-                ColaboradorReal.objects.filter(trazabilidad=trazabilidad).delete()
-                for codigo in colaboradores_codigos:
-                    try:
+                # ==================== COLABORADORES ====================
+                if colaboradores_codigos:
+                    print(f'\n👷 Actualizando colaboradores: {colaboradores_codigos}')
+                    from .models import Colaborador
+                    
+                    ModeloIntermedio = trazabilidad.colaboradores_reales.through
+                    print(f'📋 Modelo intermedio: {ModeloIntermedio.__name__}')
+                    
+                    eliminados = ModeloIntermedio.objects.filter(trazabilidad=trazabilidad).delete()
+                    print(f'  🗑️ Colaboradores eliminados: {eliminados}')
+                    
+                    for codigo in colaboradores_codigos:
                         colaborador = Colaborador.objects.get(codigo=codigo)
-                        ColaboradorReal.objects.create(
+                        
+                        ModeloIntermedio.objects.create(
                             trazabilidad=trazabilidad,
                             colaborador=colaborador
                         )
-                    except Colaborador.DoesNotExist:
-                        print(f'⚠️ Colaborador con código {codigo} no existe')
-                print(f'✅ Colaboradores actualizados: {len(colaboradores_codigos)}')
+                        print(f'  ✅ Colaborador agregado: {colaborador.nombre} {colaborador.apellido} (código: {codigo})')
+                    
+                    print('✅ Colaboradores guardados')
                 
-                # Serializar respuesta
+                print('\n✅ Trazabilidad actualizada exitosamente')
+                print('='*80 + '\n')
+                
+                # Retornar la trazabilidad actualizada
                 serializer = self.get_serializer(trazabilidad)
-                print("="*80)
-                print("✅ UPDATE COMPLETADO EXITOSAMENTE")
-                print("="*80 + "\n")
-                
                 return Response(serializer.data)
                 
         except Exception as e:
-            print(f"❌ ERROR en update: {str(e)}")
-            print("="*80 + "\n")
+            print('\n' + '='*80)
+            print('❌❌❌ ERROR GENERAL EN UPDATE ❌❌❌')
+            print('='*80)
+            import traceback
+            print(traceback.format_exc())
+            print('='*80 + '\n')
+            
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST

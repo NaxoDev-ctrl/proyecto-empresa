@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'supervisor_dashboard_screen.dart'; 
+import '../widgets/app_footer.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,6 +15,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  final Color _primaryColor = const Color(0xFF004B40);
+  final Color _lightGreenColor = const Color(0xFFC8E6C9);
   
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -68,132 +72,149 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.blue.shade700,
-              Colors.blue.shade500,
-              Colors.blue.shade300,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Logo/Icono
-                  _buildLogo(),
-                  
-                  SizedBox(height: 48),
-                  
-                  // Card de login
-                  _buildLoginCard(),
-                ],
+      backgroundColor: _primaryColor,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // 1. EL CONTENIDO VA PRIMERO (Al fondo de la pila)
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 60), // Un poco más de espacio arriba para evitar solapamiento visual
+                    
+                    // Icono Central
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: _lightGreenColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.groups_2_outlined,
+                        size: 60,
+                        color: _primaryColor,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Título Principal
+                    const Text(
+                      'GESTION Y CONTROL',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 4),
+                    
+                    // Subtítulo
+                    const Text(
+                      'Producción',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+
+                    const SizedBox(height: 30),
+                    
+                    // Card del Formulario
+                    _buildLoginCard(),
+
+                    const SizedBox(height: 40),
+                    AppFooter(),
+                  ],
+                ),
               ),
             ),
-          ),
+
+            // 2. LOS BOTONES FLOTANTES VAN AL FINAL (Arriba de la pila)
+            
+            // Botón de atrás (Top Left)
+            Positioned(
+              left: 20,
+              top: 20,
+              child: InkWell(
+                onTap: () => Navigator.of(context).pop(),
+                child: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  radius: 22,
+                  child: Icon(
+                    Icons.arrow_back,
+                    color: _primaryColor,
+                    size: 28,
+                  ),
+                ),
+              ),
+            ),
+
+            // Logo decorativo "E" (Top Right)
+            Positioned(
+              right: 20,
+              top: 20,
+              child: _buildTopRightLogo(),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildLogo() {
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 20,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.admin_panel_settings,
-            size: 72,
-            color: Colors.blue.shade700,
-          ),
-        ),
-        SizedBox(height: 24),
-        Text(
-          'SUPERVISORES',
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            letterSpacing: 2,
-            shadows: [
-              Shadow(
-                color: Colors.black26,
-                blurRadius: 4,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: 8),
-        Text(
-          'Gestión y Control',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.white70,
-            letterSpacing: 1,
-          ),
-        ),
-      ],
+  // MODIFICADO: Ahora carga la imagen desde assets
+  Widget _buildTopRightLogo() {
+    return SizedBox(
+      width: 120, 
+      height: 120,
+      // Asegúrate de agregar 'assets/images/logo_e.png' en tu pubspec.yaml
+      child: Image.asset(
+        'assets/images/logo_entrelagosE.png', 
+        fit: BoxFit.contain,
+        // Esto muestra un placeholder si la imagen no existe aún, útil para desarrollo
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white),
+            ),
+            child: const Center(
+              child: Text('Logo', style: TextStyle(color: Colors.white, fontSize: 10)),
+            ),
+          );
+        },
+      ),
     );
   }
 
   Widget _buildLoginCard() {
     return Card(
-      elevation: 12,
+      elevation: 8,
+      color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Container(
-        padding: EdgeInsets.all(32),
-        constraints: BoxConstraints(maxWidth: 400),
+        padding: const EdgeInsets.all(24),
+        width: double.infinity,
+        constraints: const BoxConstraints(maxWidth: 400),
         child: Form(
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Título del formulario
-              Text(
-                'Iniciar Sesión',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
-                ),
-              ),
+              const SizedBox(height: 10),
               
-              SizedBox(height: 32),
-              
-              // Campo de usuario
               TextFormField(
                 controller: _usernameController,
-                decoration: InputDecoration(
-                  labelText: 'Usuario',
-                  hintText: 'Ingresa tu usuario',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                ),
+                decoration: _inputDecoration('Usuario', Icons.person),
                 enabled: !_isLoading,
                 textInputAction: TextInputAction.next,
                 validator: (value) {
@@ -204,18 +225,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               
-              // Campo de contraseña
               TextFormField(
                 controller: _passwordController,
-                decoration: InputDecoration(
-                  labelText: 'Contraseña',
-                  hintText: 'Ingresa tu contraseña',
-                  prefixIcon: Icon(Icons.lock_outline),
+                decoration: _inputDecoration('Contraseña', Icons.lock_outline)
+                    .copyWith(
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.grey,
                     ),
                     onPressed: () {
                       setState(() {
@@ -223,11 +242,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       });
                     },
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
                 ),
                 obscureText: _obscurePassword,
                 enabled: !_isLoading,
@@ -241,51 +255,41 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               
-              // Mensaje de error
               if (_errorMessage != null) ...[
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 Container(
-                  padding: EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
+                  width: double.infinity,
                   decoration: BoxDecoration(
                     color: Colors.red.shade50,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red.shade200),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: Colors.red, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: TextStyle(
-                            color: Colors.red.shade700,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
               
-              SizedBox(height: 32),
+              const SizedBox(height: 24),
               
-              // Botón de login
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 50,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
+                    backgroundColor: _primaryColor,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    elevation: 4,
+                    elevation: 2,
                   ),
                   child: _isLoading
-                      ? SizedBox(
+                      ? const SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(
@@ -293,42 +297,44 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'INGRESAR',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Icon(Icons.arrow_forward, color: Colors.white),
-                          ],
+                      : const Text(
+                          'INICIAR SESIÓN',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                 ),
               ),
-              
-              SizedBox(height: 16),
-              
-              // Botón de volver
-              TextButton.icon(
-                onPressed: _isLoading
-                    ? null
-                    : () => Navigator.pop(context),
-                icon: Icon(Icons.arrow_back),
-                label: Text('Volver al inicio'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.grey.shade600,
-                ),
-              ),
+              const SizedBox(height: 10),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Colors.grey.shade600),
+      prefixIcon: Icon(icon, color: Colors.grey.shade600),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(4),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(4),
+        borderSide: BorderSide(color: Colors.grey.shade400),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(4),
+        borderSide: BorderSide(color: _primaryColor, width: 2),
+      ),
+      filled: true,
+      fillColor: Colors.white,
     );
   }
 }

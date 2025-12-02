@@ -3,6 +3,7 @@ import 'seleccion_linea_screen.dart';
 import 'login_screen.dart';
 import 'supervisor_dashboard_screen.dart';
 import '../services/api_service.dart';
+import '../widgets/app_footer.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -148,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 
                 // Footer
-                _buildFooter(),
+                AppFooter(),
               ],
             ),
           ),
@@ -218,7 +219,6 @@ class _HomeScreenState extends State<HomeScreen> {
               'assets/images/logo_entrelagos3.png', 
               width: 400,
               height: 400,
-              fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) {
                 // Si la imagen no carga, mostrar ícono de respaldo
                 return Icon(
@@ -238,9 +238,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildOperariosCard() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 12),
       child: Card(
-        elevation: 10,
+        elevation: 8,
         color: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
@@ -256,21 +256,22 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           borderRadius: BorderRadius.circular(20),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 80),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 70),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 // Ícono grande
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Color.fromARGB(255, 137, 29, 66).withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     Icons.factory,
                     size: 50,
-                    color: Colors.green.shade700,
+                    color: Color.fromARGB(255, 137, 29, 66),
                   ),
                 ),
                 
@@ -280,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   'OPERARIOS',
                   style: TextStyle(
-                    fontSize: 40,
+                    fontSize: 35,
                     fontWeight: FontWeight.bold,
                     color: Color.fromARGB(255, 137, 29, 66),
                     letterSpacing: 2,
@@ -299,42 +300,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFooter() {
-    return Padding(
-      padding: EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.info_outline,
-                size: 16,
-                color: Colors.grey.shade600,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'Versión 2.1.0',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
-          Text(
-            '© 2025 Chocolatería Entrelagos',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -23,9 +23,42 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
   bool _isLoading = true;
   String? _error;
 
+  final Color _primaryColor = const Color(0xFF891D43);
+  final Color _onPrimaryColor = const Color(0xFFFFD9C6);
+
+  final Map<String, ({Color base, Color border, Color text, Color border_turno, Color text_turno, Color text_producto})> _turnoSkin = {
+    'AM': (
+      base: const Color.fromARGB(255, 255, 249, 221),
+      border: const Color(0xFF4CAF50), 
+      text: const Color(0xFF4CAF50),
+      border_turno: const Color.fromARGB(255, 255, 222, 89),
+      text_turno: const Color.fromARGB(255, 255, 255, 255),
+      text_producto: const Color.fromARGB(255, 0, 89, 79),
+    ),
+    'PM': (
+      base: const Color.fromARGB(255, 255, 215, 179),
+      border: const Color(0xFF4CAF50), 
+      text: const Color(0xFF4CAF50),
+      border_turno: const Color.fromARGB(255, 204, 78, 0),
+      text_turno: const Color.fromARGB(255, 255, 255, 255),
+      text_producto: const Color.fromARGB(255, 140, 28, 66),
+    ),
+    'Noche': (
+      base: const Color(0xFFE3F2FD), 
+      border: const Color(0xFF2196F3),
+      text: const Color(0xFF0D47A1),
+      border_turno: const Color(0xFF891D43),
+      text_turno: const Color(0xFF2196F3),
+      text_producto: const Color.fromARGB(255, 0, 0, 0),
+    ),
+    // Agrega más turnos aquí si es necesario (ej: 'Extra', 'Fines de Semana')
+    // 'Extra': (base: const Color(0xFFFBEFF5), border: const Color(0xFF891D43), text: const Color(0xFF891D43)),
+  };
+
   @override
   void initState() {
     super.initState();
+    Intl.defaultLocale = 'es_CL'; 
     _cargarTareas();
   }
 
@@ -164,51 +197,140 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
   Color _getEstadoColor(String estado) {
     switch (estado) {
       case 'pendiente':
-        return Colors.orange;
+        return Colors.orange.shade700;
       case 'en_curso':
-        return Colors.blue;
+        return Colors.blue.shade700;
       case 'finalizada':
-        return Colors.green;
+        return Colors.green.shade700;
       default:
-        return Colors.grey;
+        return Colors.grey.shade700;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.linea.nombre} - Tareas'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+      backgroundColor: _primaryColor,
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            _buildHeaderFijo(context),
+            
+            // Contenido deslizable
+            SliverFillRemaining(
+              hasScrollBody: true,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(32),
+                    topRight: Radius.circular(32),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: _buildContent(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      body: Column(
-        children: [
-          // Info header
-          Container(
-            padding: EdgeInsets.all(16),
-            color: Theme.of(context).colorScheme.primaryContainer,
-            child: Row(
-              children: [
-                Icon(Icons.calendar_today, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  DateFormat('EEEE, d MMMM yyyy', 'es_CL').format(DateTime.now()),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+    );
+  }
+
+  Widget _buildHeaderFijo(BuildContext context) {
+    return SliverAppBar(
+      pinned: true,
+      backgroundColor: _primaryColor,
+      elevation: 0,
+      toolbarHeight: 120, 
+      
+      // Botón de atrás (izquierda)
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 16.0),
+        child: GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: CircleAvatar(
+            backgroundColor: _onPrimaryColor, // Color crema
+            radius: 22,
+            child: Icon(
+              Icons.arrow_back,
+              color: _primaryColor, // Color guinda
+              size: 35,
             ),
           ),
-
-          // Lista de tareas
-          Expanded(
-            child: _buildContent(),
+        ),
+      ),
+      
+      // Título Central
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${widget.linea.nombre} - TAREAS',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _onPrimaryColor,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+            ),
           ),
+          _buildDateHeader(),
+        ],
+      ),
+      centerTitle: true,
+      
+      // Logo (derecha)
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 16.0),
+          child: SizedBox(
+            width: 80,
+            height: 80,
+            child: Image.asset(
+              'assets/images/logo_entrelagosE.png',
+              fit: BoxFit.contain,
+              color: _onPrimaryColor, // Lo tintamos del color crema
+              errorBuilder: (context, error, stackTrace) => Icon(
+                Icons.emoji_events, // Placeholder
+                color: _onPrimaryColor,
+                size: 30,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.calendar_today, size: 20, color: _onPrimaryColor),
+          const SizedBox(width: 8),
+          Text(
+            DateFormat('EEEE, d MMMM', 'es_CL').format(DateTime.now()),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: _onPrimaryColor,
+            ),
+          ),
+          const SizedBox(width: 16),
         ],
       ),
     );
@@ -290,58 +412,65 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
   }
 
   Widget _buildTareaCard(Tarea tarea) {
+    // 1. Obtener la configuración de estilo basada en el nombre del turno
+    final turnoStyle = _turnoSkin[tarea.turnoNombre] ?? _turnoSkin['AM']!;
+    
+    // Color específico del estado
+    final estadoColor = _getEstadoColor(tarea.estado);
+    
+    // Formato de número para la meta
+    final formatter = NumberFormat('#,##0', 'es_CL');
+    final metaDisplay = '${formatter.format(tarea.metaProduccion)} unidades'; // Asumo unidades
+
     return Card(
-      margin: EdgeInsets.only(bottom: 16),
-      elevation: 4,
+      margin: const EdgeInsets.only(bottom: 20),
+      elevation: 6,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
+      color: turnoStyle.base, // Color de fondo dinámico
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _iniciarTarea(tarea),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header con turno
+              // Header: Turno y Estado
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Icono de Turno (Círculo con hora)
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade100,
+                      color: turnoStyle.border_turno,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.access_time, size: 16, color: Colors.blue.shade700),
-                        const SizedBox(width: 4),
-                        Text(
-                          tarea.turnoNombre,
-                          style: TextStyle(
-                            color: Colors.blue.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      tarea.turnoNombre,
+                      style: TextStyle(
+                        color: turnoStyle.text_turno,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                  Spacer(),
+                  const Spacer(),
+                  // Etiqueta de Estado
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getEstadoColor(tarea.estado).withOpacity(0.2),
+                      color: estadoColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _getEstadoColor(tarea.estado),
-                      ),
+                      border: Border.all(color: estadoColor, width: 1.5),
                     ),
                     child: Text(
                       tarea.estadoDisplay,
                       style: TextStyle(
-                        color: _getEstadoColor(tarea.estado),
+                        color: estadoColor,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -349,63 +478,69 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   ),
                 ],
               ),
+              
               const SizedBox(height: 16),
 
-              // Producto
+              // Producto y Código
               Text(
-                tarea.productoNombre,
+                '${tarea.productoCodigo} - ${tarea.productoNombre}',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
+                  color: turnoStyle.text_producto,
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                'Código: ${tarea.productoCodigo}',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 16),
 
-              // Meta
+
+              // Meta (Rectángulo con borde y relleno verde)
               Container(
-                padding: EdgeInsets.all(12),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: Colors.white, // Fondo blanco para que destaque
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.shade200),
+                  border: Border.all(color: turnoStyle.border, width: 3), // Borde basado en el turno
+                  boxShadow: [
+                    BoxShadow(
+                      color: turnoStyle.border.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.flag, color: Colors.green.shade700, size: 20),
+                    Icon(Icons.flag_sharp, color: turnoStyle.text, size: 20),
                     const SizedBox(width: 8),
                     Text(
                       'Meta: ',
                       style: TextStyle(color: Colors.grey[700]),
                     ),
-                    Text(
-                      '${tarea.metaProduccion} unidades',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.green.shade700,
+                    Expanded(
+                      child: Text(
+                        metaDisplay,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: turnoStyle.text,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               // Botón de iniciar
               SizedBox(
                 width: double.infinity,
-                height: 48,
+                height: 52,
                 child: ElevatedButton.icon(
                   onPressed: () => _iniciarTarea(tarea),
-                  icon: Icon(Icons.play_arrow, size: 28),
-                  label: Text(
+                  icon: const Icon(Icons.play_arrow, size: 28),
+                  label: const Text(
                     'INICIAR PRODUCCIÓN',
                     style: TextStyle(
                       fontSize: 16,
@@ -413,8 +548,11 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
+                    backgroundColor: _primaryColor, // Color guinda para el botón
+                    foregroundColor: _onPrimaryColor, // Texto crema
+                    elevation: 8,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                 ),

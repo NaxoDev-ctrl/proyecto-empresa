@@ -15,6 +15,18 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
   List<Linea> _lineas = [];
   bool _isLoading = true;
   String? _error;
+  final Color _primaryColor = const Color(0xFF891D43); // Guinda/Vino
+  final Color _onPrimaryColor = const Color(0xFFFFD9C6); // Crema/Durazno claro para texto
+  final Color _cardColor = const Color(0xFFFFEFE9); // Fondo de la tarjeta (crema más claro)
+  final Color _cardTextColor = const Color(0xFF5A102A);
+  final Map<String, String> _lineaImageAssets = {
+    'L1': 'assets/images/logo_entrelagos2.png',
+    'L2': 'assets/images/logo_entrelagosE.png',
+    'L3': 'assets/images/foto_linea3.jpg',
+    'L4': 'assets/images/foto_linea4.jpg',
+    // Agrega más mapeos según necesites:
+    // 'L3': 'assets/images/imagenL3.png',
+  };
 
   @override
   void initState() {
@@ -54,52 +66,110 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        color: const Color.fromARGB(255, 137, 29, 67),      
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  children: [
-                    Image.asset(
-                      'assets/images/logo_entrelagosE.png',
-                      width: 200,
-                      height: 200,
+      backgroundColor: _primaryColor,
+      body: SafeArea(
+        // Usamos CustomScrollView para tener un header fijo y un cuerpo deslizable
+        child: CustomScrollView(
+          slivers: [
+            _buildHeaderFijo(context),
+            
+            // Contenido deslizable
+            SliverFillRemaining(
+              hasScrollBody: true,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(32),
+                    topRight: Radius.circular(32),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Selecciona tu línea de producción',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: const Color.fromARGB(255, 255, 217, 198),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                   ],
                 ),
+                child: _buildContent(),
               ),
-
-              // Contenido
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(32),
-                      topRight: Radius.circular(32),
-                    ),
-                  ),
-                  child: _buildContent(),
-                ),
-              ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  Widget _buildHeaderFijo(BuildContext context) {
+    return SliverAppBar(
+      pinned: true, // Esto hace que el header se mantenga visible al hacer scroll
+      backgroundColor: _primaryColor,
+      elevation: 0,
+      toolbarHeight: 120, // Altura adecuada para el contenido del header
+      
+      // Botón de atrás (izquierda)
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 16.0),
+        child: GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: CircleAvatar(
+            backgroundColor: _onPrimaryColor, // Color crema
+            radius: 22,
+            child: Icon(
+              Icons.arrow_back,
+              color: _primaryColor, // Color guinda
+              size: 28,
+            ),
           ),
         ),
       ),
+      
+      // Título Central
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'SELECCIONA TU ZONA',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _onPrimaryColor,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            'PRODUCTIVA',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _onPrimaryColor,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+      centerTitle: true,
+      
+      // Logo (derecha)
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 16.0),
+          child: SizedBox(
+            width: 100,
+            height: 100,
+            // Aquí puedes usar un icono, o cargar el logo 'E' si es distinto al de login
+            child: Image.asset(
+              'assets/images/logo_entrelagosE.png',
+              fit: BoxFit.contain,
+              color: _onPrimaryColor, // Lo tintamos del color crema
+              errorBuilder: (context, error, stackTrace) => Icon(
+                Icons.emoji_events, // Placeholder
+                color: _onPrimaryColor,
+                size: 30,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -174,60 +244,101 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
   }
 
   Widget _buildLineaCard(Linea linea) {
+    // 1. Obtener la ruta de la imagen si existe
+    final String? imagePath = _lineaImageAssets[linea.nombre];
+    
     return Card(
-      elevation: 4,
+      elevation: 6,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
+      clipBehavior: Clip.antiAlias, // Necesario para que el InkWell y el Container respeten el borderRadius
       child: InkWell(
         onTap: () => _seleccionarLinea(linea),
-        borderRadius: BorderRadius.circular(16),
         child: Container(
+          // Define el fondo del Container para incluir la imagen alineada a la izquierda
           decoration: BoxDecoration(
+            color: _cardColor, // Color base de la tarjeta (crema)
             borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).colorScheme.primaryContainer,
-                Theme.of(context).colorScheme.secondaryContainer,
-              ],
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.precision_manufacturing,
-                size: 64,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                linea.nombre,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (linea.descripcion != null && linea.descripcion!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    linea.descripcion!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+            image: imagePath != null
+                ? DecorationImage(
+                    // Insertamos la imagen. Solo ocupará la porción necesaria a la izquierda
+                    image: AssetImage(imagePath),
+                    fit: BoxFit.cover,
+                    alignment: Alignment.centerLeft, // La clave: alinea la imagen a la izquierda
+                    // Opcional: Usamos ColorFilter para aclarar/blanquear la imagen y que el texto se lea mejor
+                    colorFilter: ColorFilter.mode(
+                      _cardColor.withOpacity(0.4), // Tinte suave del color de la tarjeta
+                      BlendMode.srcATop,
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  )
+                : null, // Sin imagen si no está definida
+          ),
+          child: Stack( // Usamos Stack para superponer el gradiente (difuminado) y el texto
+            fit: StackFit.expand,
+            children: [
+              // 2. Capa de Gradiente Horizontal (para lograr el difuminado hacia la derecha)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        // Gradiente que va de transparente (sobre la imagen) a opaco (sobre el texto central)
+                        // Esto crea el efecto de desvanecimiento suave de la imagen.
+                        _cardColor.withOpacity(0.0), 
+                        _cardColor.withOpacity(0.6), // Transición más suave
+                        _cardColor.withOpacity(0.95), // Casi sólido en el centro
+                        _cardColor, // Sólido a la derecha
+                      ],
+                      stops: const [0.0, 0.4, 0.7, 1.0],
+                    ),
                   ),
                 ),
-              ],
+              ),
+              
+              // 3. Contenido Central (Texto y Descripción) - Capa superior
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Título de Línea (Ej. L1)
+                      Text(
+                        linea.nombre,
+                        style: TextStyle(
+                          fontSize: 48,
+                          fontWeight: FontWeight.w900,
+                          color: _cardTextColor,
+                          shadows: [ // Sombra para mejorar la lectura sobre el fondo
+                            Shadow(
+                              color: Colors.white.withOpacity(0.8),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      
+                      // Descripción
+                      if (linea.descripcion != null && linea.descripcion!.isNotEmpty)
+                        Text(
+                          linea.descripcion!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: _cardTextColor.withOpacity(0.8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),

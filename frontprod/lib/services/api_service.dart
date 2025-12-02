@@ -10,7 +10,8 @@ import 'dart:io';
 class ApiService {
   // IMPORTANTE: Cambia esta URL según tu configuración
   // Para dispositivo físico (casa naxo): 'http://192.168.1.16:8000/api'
-  static const String baseUrl = 'http://127.0.0.1:8000/api';
+  // Para ejecutar en formato web:'http://127.0.0.1:8000/api'
+  static const String baseUrl = 'http://192.168.1.16:8000/api';
 
   // Singleton pattern
   static final ApiService _instance = ApiService._internal();
@@ -972,70 +973,91 @@ class ApiService {
   // Actualizar trazabilidad
   // ========================================================================
   Future<Map<String, dynamic>> updateTrazabilidad(
-      int trazabilidadId,
-      Map<String, dynamic> datos,
-      File fotoEtiquetas,
-    ) async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final token = prefs.getString('token');
+    int trazabilidadId,
+    Map<String, dynamic> datos, {
+    List<int>? fotoBytes,
+    String? nombreArchivo,
+  }) async {
+    try {
+      if (fotoBytes != null && nombreArchivo != null) {
+        // ========================================================================
+        // CON NUEVA FOTO: Usar multipart/form-data
+        // ========================================================================
+        print('🌐 Actualizando trazabilidad $trazabilidadId CON nueva foto...');
+        
+        var request = http.MultipartRequest(
+          'PATCH',
+          Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/'),
+        );
 
-        if (token == null) {
-          throw Exception('No hay token de autenticación');
+        // Headers
+        if (_token != null) {
+          request.headers['Authorization'] = 'Bearer $_token';
         }
+        request.headers['Accept'] = 'application/json';
 
-        final url = Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/');
-        
-        print('🌐 PATCH multipart a: $url');
-        print('📦 Datos: $datos');
-        print('📷 Foto: ${fotoEtiquetas.path}');
-
-        // Crear request multipart
-        var request = http.MultipartRequest('PATCH', url);
-        
-        // Agregar headers
-        request.headers['Authorization'] = 'Bearer $token';
-        
-        // Agregar la foto
+        // Agregar foto
+        final mediaType = _detectImageMediaType(fotoBytes, nombreArchivo);
         request.files.add(
-          await http.MultipartFile.fromPath(
+          http.MultipartFile.fromBytes(
             'foto_etiquetas',
-            fotoEtiquetas.path,
+            fotoBytes,
+            filename: nombreArchivo,
+            contentType: mediaType,
           ),
         );
-        
-        // Agregar los demás campos como JSON strings
+
+        // Agregar campos como JSON strings
         request.fields['cantidad_producida'] = datos['cantidad_producida'].toString();
-        request.fields['observaciones'] = datos['observaciones'].toString();
-        request.fields['materias_primas'] = jsonEncode(datos['materias_primas']);
-        request.fields['reprocesos_data'] = jsonEncode(datos['reprocesos_data']);
-        request.fields['mermas_data'] = jsonEncode(datos['mermas_data']);
-        request.fields['colaboradores_codigos'] = jsonEncode(datos['colaboradores_codigos']);
-        
+        request.fields['observaciones'] = datos['observaciones']?.toString() ?? '';
+        request.fields['materias_primas'] = json.encode(datos['materias_primas']);
+        request.fields['reprocesos_data'] = json.encode(datos['reprocesos_data']);
+        request.fields['mermas_data'] = json.encode(datos['mermas_data']);
+        request.fields['colaboradores_codigos'] = json.encode(datos['colaboradores_codigos']);
+
         print('📤 Enviando request multipart...');
         
-        // Enviar request
         final streamedResponse = await request.send();
         final response = await http.Response.fromStream(streamedResponse);
-        
+
         print('📥 Response status: ${response.statusCode}');
-        print('📥 Response body: ${response.body}');
 
         if (response.statusCode == 200) {
-          print('✅ Trazabilidad actualizada con foto exitosamente');
-          return jsonDecode(response.body);
+          print('✅ Trazabilidad actualizada con nueva foto');
+          return json.decode(utf8.decode(response.bodyBytes));
         } else {
-          throw Exception('Error ${response.statusCode}: ${response.body}');
+          print('❌ Error: ${response.body}');
+          _handleError(response);
+          throw Exception('Error al actualizar trazabilidad');
         }
-      } catch (e) {
-        print('❌ Error en updateTrazabilidadConFoto: $e');
-        rethrow;
+      } else {
+        // ========================================================================
+        // SIN NUEVA FOTO: Usar application/json (mantiene foto existente)
+        // ========================================================================
+        print('🌐 Actualizando trazabilidad $trazabilidadId SIN cambiar foto...');
+        
+        final response = await http.patch(
+          Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/'),
+          headers: _getHeaders(),
+          body: json.encode(datos),
+        );
+
+        print('📥 Response status: ${response.statusCode}');
+
+        if (response.statusCode == 200) {
+          print('✅ Trazabilidad actualizada (foto mantenida)');
+          return json.decode(utf8.decode(response.bodyBytes));
+        } else {
+          print('❌ Error: ${response.body}');
+          _handleError(response);
+          throw Exception('Error al actualizar trazabilidad');
+        }
       }
+    } catch (e) {
+      print('❌ Error en updateTrazabilidad: $e');
+      throw Exception('Error de conexión: $e');
     }
-
-
-
-
+  }
 
 
 

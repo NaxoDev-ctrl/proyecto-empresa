@@ -540,6 +540,7 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         'cantidad_producida', 
         'get_colaboradores_reales',
         'estado_badge', 
+        'tiene_foto_etiquetas',
         'fecha_creacion',
         'tiene_firmas'
     ]
@@ -558,13 +559,16 @@ class TrazabilidadAdmin(admin.ModelAdmin):
             'fields': ('motivo_retencion',),
             'classes': ('collapse',)
         }),
+        ('Foto de Etiquetas', {  # ← NUEVA SECCIÓN
+            'fields': ('foto_etiquetas', 'preview_foto_etiquetas')
+        }),
         ('Observaciones', {
             'fields': ('observaciones',),
             'classes': ('collapse',)
         }),
     )
     
-    readonly_fields = ['fecha_creacion']
+    readonly_fields = ['fecha_creacion', 'preview_foto_etiquetas']
     inlines = [
         TrazabilidadMateriaPrimaInline,
         TrazabilidadColaboradorInline,
@@ -631,6 +635,25 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         return f"{count} colaborador{'es' if count != 1 else ''}"
     
     get_colaboradores_count.short_description = 'Colaboradores'
+
+    def tiene_foto_etiquetas(self, obj):
+        """Muestra ícono si tiene foto"""
+        if obj.foto_etiquetas:
+            return format_html('<span style="color: green;">✓ Sí</span>')
+        return format_html('<span style="color: red;">✗ No</span>')
+    tiene_foto_etiquetas.short_description = '📷 Foto'
+    
+    def preview_foto_etiquetas(self, obj):
+        """Muestra preview de la foto en el admin"""
+        if obj.foto_etiquetas:
+            return format_html(
+                '<a href="{url}" target="_blank">'
+                '<img src="{url}" style="max-width: 300px; max-height: 300px; border: 1px solid #ddd; border-radius: 4px;"/>'
+                '</a>',
+                url=obj.foto_etiquetas.url
+            )
+        return "Sin foto"
+    preview_foto_etiquetas.short_description = 'Vista Previa de Foto'
 
 
 # ============================================================================

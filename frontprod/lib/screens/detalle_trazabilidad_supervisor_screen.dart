@@ -80,14 +80,10 @@ class _DetalleTrazabilidadSupervisorScreenState
     });
 
     try {
-      print('🔍 Cargando trazabilidad ${widget.trazabilidadId}...');
-      
       final data = await _apiService.getTrazabilidadDetalle(widget.trazabilidadId);
-      print('📦 Datos recibidos: ${data.toString()}');
       
       // Cargar todos los colaboradores disponibles
       final todosColabs = await _apiService.getColaboradores();
-      print('👥 Colaboradores disponibles: ${todosColabs.length}');
 
       setState(() {
         _trazabilidad = data;
@@ -98,26 +94,27 @@ class _DetalleTrazabilidadSupervisorScreenState
         
         // Inicializar controllers
         _cantidadProducidaController.text = _cantidadProducidaOriginal;
-        _observacionesController.text = _observacionesOriginal ?? '';
+        _observacionesController.text = _observacionesOriginal;
         
         // ========== MATERIAS PRIMAS ORIGINALES ==========
         _materiasPrimasOriginales.clear();
         _materiasPrimasEditadas.clear();
         
         final mpUsadas = data['materias_primas_usadas'] as List? ?? [];
-        print('🧪 Materias primas usadas: ${mpUsadas.length}');
         
         for (var mp in mpUsadas) {
           final mpDetalle = mp['materia_prima_detalle'] ?? mp['materia_prima'];
-          final codigo = mpDetalle['codigo'].toString();
+          if (mpDetalle == null) continue;
+          
+          final codigo = (mpDetalle['codigo'] ?? '').toString();
           
           final mpData = {
             'id': mp['id'],
             'materia_prima_id': codigo,
-            'nombre': mpDetalle['nombre'],
-            'lote': mp['lote'] ?? '',
-            'cantidad_usada': mp['cantidad_usada']?.toString() ?? '',
-            'unidad_medida': mp['unidad_medida'] ?? 'kg',
+            'nombre': (mpDetalle['nombre'] ?? 'Sin nombre').toString(),
+            'lote': (mp['lote'] ?? '').toString(),
+            'cantidad_usada': (mp['cantidad_usada'] ?? 0).toString(),
+            'unidad_medida': (mp['unidad_medida'] ?? 'kg').toString(),
             'requiere_lote': mpDetalle['requiere_lote'] ?? false,
           };
           
@@ -151,17 +148,22 @@ class _DetalleTrazabilidadSupervisorScreenState
               : c;
           
           if (colaborador == null || colaborador is! Map) {
-            print('⚠️ Colaborador inválido: $c');
             return <String, dynamic>{};
           }
           
           final codigo = colaborador['codigo'];
-          final codigoInt = codigo is int ? codigo : int.tryParse(codigo.toString()) ?? 0;
+          final codigoInt = codigo is int ? codigo : (codigo != null ? int.tryParse(codigo.toString()) ?? 0 : 0);
+
+          final nombre = colaborador['nombre']?.toString() ?? '';
+          final apellido = colaborador['apellido']?.toString() ?? '';
+          if (nombre.isEmpty && apellido.isEmpty && codigoInt == 0) {
+            return <String, dynamic>{}; // Retornar vacío
+          }
           
           return {
             'codigo': codigoInt,
-            'nombre': colaborador['nombre']?.toString() ?? '',
-            'apellido': colaborador['apellido']?.toString() ?? '',
+            'nombre': nombre,
+            'apellido': apellido,
           };
         }).where((c) => c.isNotEmpty).toList();
         
@@ -169,35 +171,26 @@ class _DetalleTrazabilidadSupervisorScreenState
           (c) => Map<String, dynamic>.from(c)
         ).toList();
         
-        print('✅ Colaboradores cargados: $_colaboradoresSeleccionados');
-        
         // Guardar todos los colaboradores disponibles
         _todosColaboradores = todosColabs.map<Map<String, dynamic>>((c) {
           final codigo = c['codigo'];
-          final codigoInt = codigo is int ? codigo : int.tryParse(codigo.toString()) ?? 0;
+          final codigoInt = codigo is int ? codigo : (codigo != null ? int.tryParse(codigo.toString()) ?? 0 : 0);
           
           return {
             'codigo': codigoInt,
-            'nombre': c['nombre']?.toString() ?? '',
-            'apellido': c['apellido']?.toString() ?? '',
+            'nombre': (c['nombre'] ?? '').toString(),
+            'apellido': (c['apellido'] ?? '').toString(),
           };
         }).toList();
         
-        print('✅ Total colaboradores disponibles: ${_todosColaboradores.length}');
         // ========== CARGAR FOTO DE ETIQUETAS ==========
         if (data['foto_etiquetas'] != null && 
             data['foto_etiquetas'].toString().isNotEmpty) {
-          setState(() {
-            _fotoEtiquetasUrl = data['foto_etiquetas'];
-          });
-          print('📷 Foto etiquetas cargada: $_fotoEtiquetasUrl');
-        } else {
-          print('⚠️ No hay foto de etiquetas guardada');
+            _fotoEtiquetasUrl = data['foto_etiquetas'].toString();
         }
       });
 
-    } catch (e) {
-      print('❌ ERROR al cargar trazabilidad: $e');
+    } catch (e, stackTrace) {
       setState(() {
         _error = 'Error al cargar trazabilidad: $e';
       });
@@ -633,6 +626,11 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   // ========== UI: INFORMACIÓN DE LA TAREA ==========
   Widget _buildSeccionTarea() {
+    // Validación inicial
+    if (_trazabilidad == null) {
+      return const SizedBox.shrink();
+    }
+
     final hojaProcesos = _trazabilidad!['hoja_procesos_detalle'];
     if (hojaProcesos == null || hojaProcesos is! Map<String, dynamic>) {
       return const SizedBox.shrink();
@@ -643,17 +641,19 @@ class _DetalleTrazabilidadSupervisorScreenState
       return const SizedBox.shrink();
     }
 
+    // ✅ VALIDACIÓN MEJORADA: Manejar casos donde producto/linea/turno sean null o no sean Maps
     final producto = tarea['producto'];
     final linea = tarea['linea'];
     final turno = tarea['turno'];
+    final fecha = tarea['fecha'];
 
+    // Si alguno es null o no es Map, no mostrar nada
     if (producto == null || producto is! Map<String, dynamic> ||
         linea == null || linea is! Map<String, dynamic> ||
         turno == null || turno is! Map<String, dynamic>) {
+      print('⚠️ Datos de tarea incompletos o en formato inesperado');
       return const SizedBox.shrink();
     }
-
-    final fecha = tarea['fecha'];
 
     return Card(
       margin: const EdgeInsets.all(16),
@@ -672,19 +672,25 @@ class _DetalleTrazabilidadSupervisorScreenState
             ),
             const Divider(),
             const SizedBox(height: 8),
-            _buildInfoRow('Producto', producto['nombre']?.toString() ?? ''),
-            _buildInfoRow('Código', producto['codigo']?.toString() ?? ''),
-            _buildInfoRow('Línea', linea['nombre']?.toString() ?? ''),
-            _buildInfoRow('Turno', turno['nombre']?.toString() ?? ''),
+            
+            // ✅ USAR ?? '' para evitar nulls
+            _buildInfoRow('Producto', producto['nombre']?.toString() ?? 'Sin nombre'),
+            _buildInfoRow('Código', producto['codigo']?.toString() ?? 'Sin código'),
+            _buildInfoRow('Línea', linea['nombre']?.toString() ?? 'Sin línea'),
+            _buildInfoRow('Turno', turno['nombre']?.toString() ?? 'Sin turno'),
             _buildInfoRow(
               'Fecha', 
-              fecha != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(fecha)) : ''
+              fecha != null 
+                  ? DateFormat('dd/MM/yyyy').format(DateTime.parse(fecha)) 
+                  : 'Sin fecha'
             ),
             _buildInfoRow(
               'Fecha Creación',
-              DateFormat('dd/MM/yyyy HH:mm').format(
-                DateTime.parse(_trazabilidad!['fecha_creacion']),
-              ),
+              _trazabilidad!['fecha_creacion'] != null
+                  ? DateFormat('dd/MM/yyyy HH:mm').format(
+                      DateTime.parse(_trazabilidad!['fecha_creacion']),
+                    )
+                  : 'Sin fecha',
             ),
           ],
         ),
@@ -1337,8 +1343,10 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   // ========== UI: FIRMAS ==========
   Widget _buildSeccionFirmas() {
-    final firmas = _trazabilidad!['firmas'] as List;
-    final tieneFirmaSupervisor = firmas.any((f) => f['tipo_firma'] == 'supervisor');
+    final firmas = _trazabilidad!['firmas'] as List? ?? [];
+    final tieneFirmaSupervisor = firmas.any(
+      (f) => f is Map && f['tipo_firma'] == 'supervisor'
+    );
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1369,7 +1377,35 @@ class _DetalleTrazabilidadSupervisorScreenState
               )
             else
               ...firmas.map((firma) {
+                // ✅ VALIDACIÓN: Verificar que firma sea un Map válido
+                if (firma == null || firma is! Map<String, dynamic>) {
+                  return const SizedBox.shrink();
+                }
+
                 final esSupervisor = firma['tipo_firma'] == 'supervisor';
+                
+                // ✅ OBTENER VALORES CON DEFAULTS SEGUROS
+                String usuarioNombre = 'Usuario desconocido';
+                if (firma['usuario_detalle'] != null && firma['usuario_detalle'] is Map) {
+                  final usuarioDetalle = firma['usuario_detalle'] as Map;
+                  usuarioNombre = (usuarioDetalle['nombre_completo'] ?? 
+                                  usuarioDetalle['username'] ?? 
+                                  'Usuario desconocido').toString();
+                } else if (firma['usuario_nombre'] != null) {
+                  usuarioNombre = firma['usuario_nombre'].toString();
+                }
+                final fechaFirma = firma['fecha_firma'];
+                
+                // ✅ Formatear fecha de forma segura
+                String fechaFormateada = 'Fecha no disponible';
+                if (fechaFirma != null) {
+                  try {
+                    final dateTime = DateTime.parse(fechaFirma.toString());
+                    fechaFormateada = DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
+                  } catch (e) {
+                    fechaFormateada = fechaFirma.toString();
+                  }
+                }
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -1400,13 +1436,11 @@ class _DetalleTrazabilidadSupervisorScreenState
                               ),
                             ),
                             Text(
-                              firma['usuario_nombre'],
+                              usuarioNombre,
                               style: const TextStyle(fontSize: 12),
                             ),
                             Text(
-                              DateFormat('dd/MM/yyyy HH:mm').format(
-                                DateTime.parse(firma['fecha_firma']),
-                              ),
+                              fechaFormateada,
                               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                             ),
                           ],
@@ -1514,6 +1548,42 @@ class _DetalleTrazabilidadSupervisorScreenState
   // ========== BUILD PRINCIPAL ==========
   @override
   Widget build(BuildContext context) {
+  // ========== CAPTURAR CUALQUIER ERROR ==========
+  try {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _cargarTrazabilidad,
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detalle de Trazabilidad'),
@@ -1525,52 +1595,223 @@ class _DetalleTrazabilidadSupervisorScreenState
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error, size: 64, color: Colors.red),
-                        const SizedBox(height: 16),
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _cargarTrazabilidad,
-                          child: const Text('Reintentar'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _cargarTrazabilidad,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSeccionTarea(),
-                        _buildSeccionProduccion(),
-                        _buildSeccionMateriasPrimas(),
-                        _buildSeccionColaboradores(),
-                        _buildSeccionReprocesos(),
-                        _buildSeccionMermas(),
-                        _buildFotoEtiquetas(),
-                        _buildSeccionFirmas(),
-                        const SizedBox(height: 32),
-                      ],
-                    ),
-                  ),
-                ),
+      body: RefreshIndicator(
+        onRefresh: _cargarTrazabilidad,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ✅ CADA SECCIÓN CON SU PROPIO TRY-CATCH
+              _buildSeccionTareaSegura(),
+              _buildSeccionProduccionSegura(),
+              _buildSeccionMateriasPrimasSegura(),
+              _buildSeccionColaboradoresSegura(),
+              _buildSeccionReprocesosSegura(),
+              _buildSeccionMermasSegura(),
+              _buildFotoEtiquetasSegura(),
+              _buildSeccionFirmasSegura(),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
     );
+  } catch (e, stackTrace) {
+    // ✅ SI HAY CUALQUIER ERROR EN EL BUILD, MOSTRARLO AQUÍ
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('❌ ERROR CRÍTICO'),
+        backgroundColor: Colors.red,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.red.shade50,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '🔥 ERROR DETECTADO:',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    '$e',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              '📍 STACK TRACE:',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: Colors.grey.shade100,
+              child: SelectableText(
+                '$stackTrace',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Volver'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+  Widget _buildSeccionTareaSegura() {
+    try {
+      return _buildSeccionTarea();
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('❌ Error en sección Tarea: $e'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildSeccionProduccionSegura() {
+    try {
+      return _buildSeccionProduccion();
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('❌ Error en sección Producción: $e'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildSeccionMateriasPrimasSegura() {
+    try {
+      return _buildSeccionMateriasPrimas();
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('❌ Error en sección Materias Primas: $e'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildSeccionColaboradoresSegura() {
+    try {
+      return _buildSeccionColaboradores();
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('❌ Error en sección Colaboradores: $e'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildSeccionReprocesosSegura() {
+    try {
+      return _buildSeccionReprocesos();
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('❌ Error en sección Reprocesos: $e'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildSeccionMermasSegura() {
+    try {
+      return _buildSeccionMermas();
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('❌ Error en sección Mermas: $e'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildFotoEtiquetasSegura() {
+    try {
+      return _buildFotoEtiquetas();
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('❌ Error en sección Foto: $e'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildSeccionFirmasSegura() {
+    try {
+      return _buildSeccionFirmas();
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('❌ Error en sección Firmas: $e'),
+        ),
+      );
+    }
   }
 }
 

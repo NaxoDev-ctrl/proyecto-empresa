@@ -177,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
       height: 120,
       // Asegúrate de agregar 'assets/images/logo_e.png' en tu pubspec.yaml
       child: Image.asset(
-        'assets/images/logo_entrelagosE.png', 
+        'assets/images/logo_entrelagosE_verde.png', 
         fit: BoxFit.contain,
         // Esto muestra un placeholder si la imagen no existe aún, útil para desarrollo
         errorBuilder: (context, error, stackTrace) {

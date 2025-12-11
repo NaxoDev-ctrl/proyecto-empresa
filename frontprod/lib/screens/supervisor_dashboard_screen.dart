@@ -7,6 +7,8 @@ import 'lista_tareas_screen.dart';
 import 'colaboradores_screen.dart';
 import 'firma_supervisor_screen.dart';
 
+const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
+
 class SupervisorDashboard extends StatefulWidget {
   const SupervisorDashboard({super.key});
 
@@ -39,13 +41,33 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chocolatería Entrelagos'),
+        backgroundColor: primaryColorDark,
+        elevation: 0,
+        toolbarHeight: 70, 
+
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
             Navigator.pop(context, true);
           },
         ),
+
+        title: Center(
+          child: Padding(
+            padding: const EdgeInsets.only(left: 30.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/images/logo_entrelagosE_verde.png',
+                  height: 60,
+                ),
+                const SizedBox(width: 8),
+                
+              ],)
+          ),
+        ),
+
         actions: [
           // Información del usuario
           Padding(
@@ -108,25 +130,6 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           ),
         ],
       ),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton.extended(
-              onPressed: () async {
-                final resultado = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CrearTareaScreen(),
-                  ),
-                );
-                
-                // Si se creó una tarea, recargar la lista
-                if (resultado == true) {
-                  _refreshLista();
-                }
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Nueva Tarea'),
-            )
-          : null,
     );
   }
 
@@ -145,7 +148,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: Colors.blue,
             ),
             child: const Text('Cerrar Sesión'),
           ),

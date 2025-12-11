@@ -17,12 +17,12 @@ class Turno {
 
   factory Turno.fromJson(Map<String, dynamic> json) {
     return Turno(
-      id: json['id'],
-      nombre: json['nombre'],
-      nombreDisplay: json['nombre_display'],
-      horaInicio: json['hora_inicio'],
-      horaFin: json['hora_fin'],
-      activo: json['activo'],
+      id: json['id'] ?? 0,
+      nombre: json['nombre'] ?? '',
+      nombreDisplay: json['nombre_display'] ?? '',
+      horaInicio: json['hora_inicio'] ?? '',
+      horaFin: json['hora_fin'] ?? '',
+      activo: json['activo'] ?? true,
     );
   }
 

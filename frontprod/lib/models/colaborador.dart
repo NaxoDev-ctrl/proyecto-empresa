@@ -17,12 +17,12 @@ class Colaborador {
 
   factory Colaborador.fromJson(Map<String, dynamic> json) {
     return Colaborador(
-      id: json['id'],
-      codigo: json['codigo'],
-      nombre: json['nombre'],
-      apellido: json['apellido'],
-      nombreCompleto: json['nombre_completo'],
-      activo: json['activo'],
+      id: json['id'] ?? 0,
+      codigo: json['codigo'] ?? 0,
+      nombre: json['nombre'] ?? '',
+      apellido: json['apellido'] ?? '',
+      nombreCompleto: json['nombre_completo'] ?? '',
+      activo: json['activo'] ?? true,
     );
   }
 

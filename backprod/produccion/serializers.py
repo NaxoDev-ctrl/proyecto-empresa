@@ -753,6 +753,28 @@ class FirmaTrazabilidadSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'fecha_firma']
 
+    def get_usuario_nombre(self, obj):
+        """Obtener nombre completo del usuario"""
+        if obj.usuario:
+            # ✅ CORRECCIÓN: Usar get_full_name() o construir el nombre manualmente
+            if hasattr(obj.usuario, 'get_full_name'):
+                nombre = obj.usuario.get_full_name()
+                if nombre and nombre.strip():
+                    return nombre
+            
+            # Fallback: construir nombre desde first_name y last_name
+            first = obj.usuario.first_name or ''
+            last = obj.usuario.last_name or ''
+            nombre_completo = f"{first} {last}".strip()
+            
+            if nombre_completo:
+                return nombre_completo
+            
+            # Último fallback: username
+            return obj.usuario.username
+        
+        return None
+
 
 # ============================================================================
 # SERIALIZER: Trazabilidad (Listado)

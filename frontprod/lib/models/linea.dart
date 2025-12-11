@@ -13,9 +13,9 @@ class Linea {
 
   factory Linea.fromJson(Map<String, dynamic> json) {
     return Linea(
-      id: json['id'],
-      nombre: json['nombre'],
-      activa: json['activa'],
+      id: json['id'] ?? 0,
+      nombre: json['nombre'] ?? '',
+      activa: json['activa'] ?? true,
       descripcion: json['descripcion'],
     );
   }

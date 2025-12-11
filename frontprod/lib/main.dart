@@ -7,7 +7,7 @@ import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); 
-  await initializeDateFormatting('en_US', null);
+  await initializeDateFormatting('es_ES', null);
   runApp(const MyApp());
 }
 
@@ -24,12 +24,12 @@ class MyApp extends StatelessWidget {
           title: 'Chocolatería Entrelagos',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
             useMaterial3: true,
             appBarTheme: AppBarTheme(
               centerTitle: true,
               elevation: 0,
-              backgroundColor: Colors.red.shade700,
+              backgroundColor: Colors.blue.shade700,
               foregroundColor: Colors.white,
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(

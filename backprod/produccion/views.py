@@ -19,7 +19,7 @@ from .models import (
     Maquina, TipoEvento,
     HojaProcesos, EventoProceso, EventoMaquina,
     Trazabilidad, TrazabilidadMateriaPrima,
-    Reproceso, Merma, FirmaTrazabilidad
+    Reproceso, Merma, FirmaTrazabilidad, TrazabilidadColaborador
 )
 from .serializers import (
     UsuarioSerializer, LineaSerializer, TurnoSerializer,
@@ -1117,23 +1117,23 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                 
                 # ==================== COLABORADORES ====================
                 if colaboradores_codigos:
-                    print(f'\n👷 Actualizando colaboradores: {colaboradores_codigos}')
+                    print(f'\n Actualizando colaboradores: {colaboradores_codigos}')
                     from .models import Colaborador
                     
-                    ModeloIntermedio = trazabilidad.colaboradores_reales.through
-                    print(f'📋 Modelo intermedio: {ModeloIntermedio.__name__}')
-                    
-                    eliminados = ModeloIntermedio.objects.filter(trazabilidad=trazabilidad).delete()
-                    print(f'  🗑️ Colaboradores eliminados: {eliminados}')
+                    TrazabilidadColaborador.objects.filter(trazabilidad=trazabilidad).delete()
                     
                     for codigo in colaboradores_codigos:
-                        colaborador = Colaborador.objects.get(codigo=codigo)
-                        
-                        ModeloIntermedio.objects.create(
-                            trazabilidad=trazabilidad,
-                            colaborador=colaborador
-                        )
-                        print(f'  ✅ Colaborador agregado: {colaborador.nombre} {colaborador.apellido} (código: {codigo})')
+                        try:
+                            colaborador = Colaborador.objects.get(codigo=codigo)
+                            TrazabilidadColaborador.objects.create(
+                                trazabilidad=trazabilidad,
+                                colaborador=colaborador
+                            )
+                            print(f'  Colaborador agregado: {colaborador.nombre} {colaborador.apellido} (código: {codigo})')
+                        except Colaborador.DoesNotExist:
+                            print(f'  Colaborador con código {codigo} no encontrado - IGNORADO')
+                            continue
+            
                     
                     print('✅ Colaboradores guardados')
                 
@@ -1236,6 +1236,20 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Verificar que el usuario esté autenticado
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'error': 'Usuario no autenticado'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # LOGGING PARA DEBUGGING
+        print(f'👤 Usuario firmando: {request.user}')
+        print(f'   - Username: {request.user.username}')
+        print(f'   - First name: {request.user.first_name}')
+        print(f'   - Last name: {request.user.last_name}')
+        print(f'   - Rol: {request.user.rol}')
+        
         # Determinar tipo de firma según el rol del usuario
         if request.user.rol == 'supervisor':
             tipo_firma = 'supervisor'
@@ -1248,35 +1262,67 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
             )
         
         # Validar que no exista ya una firma de este tipo
-        if FirmaTrazabilidad.objects.filter(
-            trazabilidad=trazabilidad,
-            tipo_firma=tipo_firma
-        ).exists():
+        if request.user.rol == 'supervisor':
+            tipo_firma = 'supervisor'
+            
+            # Verificar que no exista ya una firma de supervisor
+            if FirmaTrazabilidad.objects.filter(
+                trazabilidad=trazabilidad,
+                tipo_firma='supervisor'
+            ).exists():
+                return Response(
+                    {'error': 'Esta trazabilidad ya tiene firma de supervisor'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        elif request.user.rol == 'control_calidad':
+            tipo_firma = 'control_calidad'
+            
+            # Verificar que exista firma de supervisor primero
+            if not FirmaTrazabilidad.objects.filter(
+                trazabilidad=trazabilidad,
+                tipo_firma='supervisor'
+            ).exists():
+                return Response(
+                    {'error': 'Debe existir firma de supervisor antes de firmar como control de calidad'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verificar que no exista ya firma de calidad
+            if FirmaTrazabilidad.objects.filter(
+                trazabilidad=trazabilidad,
+                tipo_firma='control_calidad'
+            ).exists():
+                return Response(
+                    {'error': 'Esta trazabilidad ya tiene firma de control de calidad'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        else:
             return Response(
-                {'error': f'Ya existe una firma de {tipo_firma} para esta trazabilidad'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': f'El rol {request.user.rol} no está autorizado para firmar'},
+                status=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            # Crear la firma
-            firma = FirmaTrazabilidad.objects.create(
-                trazabilidad=trazabilidad,
-                tipo_firma=tipo_firma,
-                usuario=request.user
-            )
-            
-            serializer = FirmaTrazabilidadSerializer(firma)
-            return Response({
-                'success': True,
-                'message': f'Firma de {tipo_firma} creada correctamente',
-                'firma': serializer.data
-            }, status=status.HTTP_201_CREATED)
-        except ValidationError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-
+        # Crear la firma
+        firma = FirmaTrazabilidad.objects.create(
+            trazabilidad=trazabilidad,
+            usuario=request.user,  # ✅ ASEGURAR QUE SE GUARDA EL USUARIO
+            tipo_firma=tipo_firma
+        )
+        
+        # ✅ LOGGING POST-CREACIÓN
+        print(f'✅ Firma creada:')
+        print(f'   - ID: {firma.id}')
+        print(f'   - Usuario: {firma.usuario}')
+        print(f'   - Tipo: {firma.tipo_firma}')
+        
+        # Serializar y retornar
+        serializer = FirmaTrazabilidadSerializer(firma)
+        
+        # ✅ LOGGING DEL SERIALIZER
+        print(f'📦 Datos serializados: {serializer.data}')
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 

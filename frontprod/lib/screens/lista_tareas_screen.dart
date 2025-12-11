@@ -5,6 +5,10 @@ import '../services/api_service.dart';
 import '../models/tarea.dart';
 import '../providers/filtro_provider.dart';
 import 'detalle_tarea_screen.dart';
+import 'crear_tarea_screen.dart';
+
+const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
+const Color primaryColorLight = Color.fromARGB(255, 217, 244, 205);
 
 class ListaTareasScreen extends StatefulWidget {
   final VoidCallback? onRefreshNeeded;
@@ -27,9 +31,43 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
   String? _error;
   DateTime _selectedDate = DateTime.now();
 
+  final Map<String, ({Color base, Color borderTurno, Color textTurno, Color textProducto})> _turnoSkin = {
+    'AM': (
+      // Base: Amarillo pálido (similar a la imagen)
+      base: const Color.fromARGB(255, 255, 249, 221), 
+      // Turno Border/Background: Amarillo/Dorado
+      borderTurno: const Color.fromARGB(255, 255, 222, 89),
+      // Turno Text: Blanco
+      textTurno: Colors.white,
+      // Producto Text: Dark Teal (color corporativo)
+      textProducto: const Color.fromARGB(255, 0, 89, 79),
+    ),
+    'PM': (
+      // Base: Durazno pálido (similar a la imagen)
+      base: const Color.fromARGB(255, 255, 215, 179),
+      // Turno Border/Background: Naranja oscuro
+      borderTurno: const Color.fromARGB(255, 204, 78, 0),
+      // Turno Text: Blanco
+      textTurno: Colors.white,
+      // Producto Text: Granate/Vino
+      textProducto: const Color.fromARGB(255, 140, 28, 66),
+    ),
+    'Noche': (
+      // Base: Azul muy pálido (ejemplo)
+      base: const Color(0xFFE3F2FD), 
+      // Turno Border/Background: Rojo Oscuro
+      borderTurno: const Color(0xFF891D43),
+      // Turno Text: Azul
+      textTurno: const Color(0xFF2196F3),
+      // Producto Text: Negro
+      textProducto: Colors.black,
+    ),
+  };
+
   @override
   void initState() {
     super.initState();
+    Intl.defaultLocale = 'es_ES';
     // Cargar fecha guardada del provider
     final filtroProvider = Provider.of<FiltroProvider>(context, listen: false);
     _selectedDate = filtroProvider.selectedDate;
@@ -68,6 +106,23 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
       initialDate: _selectedDate,
       firstDate: DateTime(2024),
       lastDate: DateTime(2080),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: primaryColorDark, // Color del encabezado y botones
+              onPrimary: Colors.white, // Color del texto en el encabezado
+              onSurface: Colors.black, // Color de los textos en el calendario
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColorDark, // Color de los botones de acción
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null && picked != _selectedDate) {
@@ -95,42 +150,112 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
     }
   }
 
+  ({Color base, Color borderTurno, Color textTurno, Color textProducto}) _getTurnoSkin(String turnoCodigo) {
+    // Si el código de turno no existe, usamos AM como valor predeterminado seguro
+    return _turnoSkin[turnoCodigo] ?? _turnoSkin['AM']!;
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // Necesario para AutomaticKeepAliveClientMixin
     return Column(
       children: [
-        // Filtro de fecha
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Theme.of(context).colorScheme.primaryContainer,
-          child: Row(
-            children: [
-              const Icon(Icons.calendar_today),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  DateFormat('EEEE, d MMMM yyyy').format(_selectedDate),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _seleccionarFecha,
-                icon: const Icon(Icons.edit_calendar),
-                label: const Text('Cambiar'),
-              ),
-            ],
-          ),
-        ),
+        _buildHeaderToolbar(),
 
-        // Lista de tareas
         Expanded(
           child: _buildContent(),
         ),
       ],
+    );
+  }
+
+  Widget _buildHeaderToolbar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Color.fromARGB(255, 0, 58, 48),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // 1. Botón Nueva Tarea (replicando el diseño de la imagen)
+          _buildNewTaskButton(),
+
+          const SizedBox(width: 8),
+
+          // 2. Botón y selector de fecha
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: primaryColorLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TextButton(
+                onPressed: _seleccionarFecha,
+                style: TextButton.styleFrom(
+                  foregroundColor: primaryColorDark,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.calendar_today, size: 18),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Filtrar Fecha a: ',
+                      style: TextStyle(
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        DateFormat('EEEE, d MMMM yyyy').format(_selectedDate),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              )
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNewTaskButton() {
+    return ElevatedButton.icon(
+      onPressed: () async {
+        final resultado = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CrearTareaScreen(),
+          ),
+        );
+        // Si se creó una tarea, recargar la lista
+        if (resultado == true) {
+          _cargarTareas();
+        }
+      },
+      icon: const Icon(Icons.add, size: 18,),
+      label: const Text('Nueva Tarea', style: TextStyle(fontWeight: FontWeight.bold)),
+      style: ElevatedButton.styleFrom(
+        
+        backgroundColor: primaryColorLight, // Fondo blanco
+        foregroundColor: primaryColorDark, // Texto verde oscuro
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        elevation: 0,
+      ),
     );
   }
 
@@ -140,7 +265,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
+            CircularProgressIndicator(color: primaryColorDark),
             SizedBox(height: 16),
             Text(
               'Cargando tareas...',
@@ -159,7 +284,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
             const Icon(
               Icons.error_outline,
               size: 64,
-              color: Colors.red,
+              color: primaryColorDark,
             ),
             const SizedBox(height: 16),
             Text(
@@ -177,6 +302,10 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
               onPressed: _cargarTareas,
               icon: const Icon(Icons.refresh),
               label: const Text('Reintentar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColorDark, // Botón de fondo verde
+                foregroundColor: Colors.white,
+              ),
             ),
           ],
         ),
@@ -191,7 +320,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
             Icon(
               Icons.inbox,
               size: 64,
-              color: Colors.grey[400],
+              color: primaryColorDark.withOpacity(0.5), 
             ),
             const SizedBox(height: 16),
             Text(
@@ -212,6 +341,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
 
     return RefreshIndicator(
       onRefresh: _cargarTareas,
+      color: primaryColorDark,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _tareas.length,
@@ -224,10 +354,20 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
   }
 
   Widget _buildTareaCard(Tarea tarea) {
+    final skin = _getTurnoSkin(tarea.turnoNombre);
     final isFinalized = tarea.estado != 'pendiente';
     
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey.shade300,
+          width: 2,
+        ),
+      ),
+      elevation: 2,
+      color: skin.base,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: isFinalized
@@ -239,8 +379,8 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
                     builder: (context) => DetalleTareaScreen(tareaId: tarea.id),
                   ),
                 );
-                
-                // Si se eliminó o editó la tarea, recargar la lista
+
+                // Si se actualizó la tarea, recargar la lista
                 if (resultado == true) {
                   _cargarTareas();
                 }
@@ -261,12 +401,29 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getEstadoColor(tarea.estado).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _getEstadoColor(tarea.estado),
-                          width: 1,
+                        color: skin.borderTurno,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: skin.borderTurno),
+                      ),
+                      child: Text(
+                        tarea.turnoNombre,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: skin.textTurno,
                         ),
+                      ),
+                    ),
+                    const Spacer(),
+
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getEstadoColor(tarea.estado).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         tarea.estadoDisplay,
@@ -277,63 +434,45 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
                         ),
                       ),
                     ),
-                    const Spacer(),
-                    Text(
-                      tarea.turnoNombre,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
 
-                // Producto
+                // Línea y Producto (Título)
                 Text(
-                  tarea.productoNombre,
-                  style: const TextStyle(
+                  tarea.lineaNombre,
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: skin.textProducto, // Título en color verde
                   ),
                 ),
-                const SizedBox(height: 4),
+                
+                // Código de Producto
                 Text(
-                  'Código: ${tarea.productoCodigo}',
+                  '${tarea.productoCodigo} - ${tarea.productoNombre}',
                   style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: skin.textProducto, // Título en color verde
                   ),
                 ),
-                const SizedBox(height: 12),
-
+                const SizedBox(height: 8),
+                
                 // Información adicional
                 Row(
                   children: [
-                    Icon(Icons.straighten, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
+                    Icon(Icons.flag, size: 16, color: primaryColorDark),
+                    const SizedBox(width: 6),
                     Text(
-                      tarea.lineaNombre,
-                      style: TextStyle(color: Colors.grey[600]),
+                      'Producción: ${tarea.metaProduccion} unidades', // Usando meta como placeholder
+                      style: const TextStyle(
+                        color: primaryColorDark,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(width: 16),
-                    Icon(Icons.flag, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Meta: ${tarea.metaProduccion} unidades',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.person, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      tarea.supervisorNombre,
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
                   ],
                 ),
               ],

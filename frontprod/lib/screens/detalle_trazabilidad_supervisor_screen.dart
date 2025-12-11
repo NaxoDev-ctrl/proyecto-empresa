@@ -684,14 +684,6 @@ class _DetalleTrazabilidadSupervisorScreenState
                   ? DateFormat('dd/MM/yyyy').format(DateTime.parse(fecha)) 
                   : 'Sin fecha'
             ),
-            _buildInfoRow(
-              'Fecha Creación',
-              _trazabilidad!['fecha_creacion'] != null
-                  ? DateFormat('dd/MM/yyyy HH:mm').format(
-                      DateTime.parse(_trazabilidad!['fecha_creacion']),
-                    )
-                  : 'Sin fecha',
-            ),
           ],
         ),
       ),

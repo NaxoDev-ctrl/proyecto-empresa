@@ -779,7 +779,7 @@ class Trazabilidad(models.Model):
     cantidad_producida = models.PositiveIntegerField(
         help_text="Cantidad producida en unidades"
     )
-    # NUEVO CAMPO: Foto de etiquetas directamente en el modelo
+
     foto_etiquetas = models.ImageField(
         upload_to='trazabilidad/etiquetas/%Y/%m/%d/',
         verbose_name='Foto de Etiquetas',

@@ -419,6 +419,16 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
           ? firmas.firstWhere((firma) => firma is Map && firma['tipo_firma'] == 'supervisor')
           : null;
 
+      final tieneFirmaCalidad = firmas.any(
+        (firma) => firma is Map && firma['tipo_firma'] == 'control_calidad',
+      );
+
+      final firmaCalidad = tieneFirmaCalidad
+          ? firmas.firstWhere((firma) => firma is Map && firma['tipo_firma'] == 'control_calidad')
+          : null;
+
+      
+
       return Card(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: InkWell(
@@ -442,7 +452,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Column(
@@ -466,31 +476,69 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: tieneFirmaSupervisor ? Colors.green : Colors.orange,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            tieneFirmaSupervisor ? Icons.check_circle : Icons.pending,
-                            size: 16,
-                            color: Colors.white,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: tieneFirmaSupervisor ? Colors.green : Colors.orange,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            tieneFirmaSupervisor ? 'Firmada' : 'Sin firmar',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                tieneFirmaSupervisor ? Icons.check_circle : Icons.pending,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                tieneFirmaSupervisor ? 'Supervisor ✓' : 'Sin firmar',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+
+                        const SizedBox(height: 6),
+
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: tieneFirmaCalidad 
+                                ? Colors.blue 
+                                : (tieneFirmaSupervisor ? Colors.grey : Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                tieneFirmaCalidad ? Icons.verified : Icons.hourglass_empty,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                tieneFirmaCalidad 
+                                    ? 'Calidad ✓' 
+                                    : (tieneFirmaSupervisor ? 'Pendiente' : 'N/A'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -525,23 +573,45 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                   ],
                 ),
 
-                if (tieneFirmaSupervisor && firmaSupervisor != null && firmaSupervisor is Map) ...[
+                if (tieneFirmaSupervisor || tieneFirmaCalidad) ...[
                   const Divider(height: 24),
-                  Row(
-                    children: [
-                      Icon(Icons.edit_note, size: 16, color: Colors.green[700]),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Firmada por ${firmaSupervisor['usuario_nombre']?.toString() ?? ''} el ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(firmaSupervisor['fecha_firma']))}',
-                          style: TextStyle(fontSize: 12, color: Colors.green[700]),
+                  
+                  // Firma de Supervisor
+                  if (tieneFirmaSupervisor && firmaSupervisor != null && firmaSupervisor is Map) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.edit_note, size: 16, color: Colors.green[700]),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Firmada por ${firmaSupervisor['usuario_nombre']?.toString() ?? ''} el ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(firmaSupervisor['fecha_firma']))}',
+                            style: TextStyle(fontSize: 11, color: Colors.green[700]),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
+                  
+                  // Firma de Control de Calidad
+                  if (tieneFirmaCalidad && firmaCalidad != null && firmaCalidad is Map) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.verified, size: 16, color: Colors.blue[700]),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Firmada por ${firmaCalidad['usuario_nombre']?.toString() ?? ''} el ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(firmaCalidad['fecha_firma']))}',
+                            style: TextStyle(fontSize: 11, color: Colors.blue[700]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
 
                 const SizedBox(height: 8),
+
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(

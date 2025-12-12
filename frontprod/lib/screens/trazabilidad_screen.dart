@@ -25,6 +25,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   // Controllers
   final _cantidadProducidaController = TextEditingController();
   final _observacionesController = TextEditingController();
+  final _codigoColaboradorLoteController = TextEditingController();
   
   // Datos de la tarea
   Map<String, dynamic>? _tarea;
@@ -56,6 +57,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   void dispose() {
     _cantidadProducidaController.dispose();
     _observacionesController.dispose();
+    _codigoColaboradorLoteController.dispose();
     super.dispose();
   }
 
@@ -652,6 +654,60 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
       return;
     }
 
+    if (_codigoColaboradorLoteController.text.trim().isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 32),
+              SizedBox(width: 12),
+              Text('Falta Código de Lote'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Debes ingresar el código del colaborador a cargo para generar el lote.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.qr_code, color: Colors.red),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Este código se usa para formar el lote: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_COLABORADOR',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     // ========================================================================
     // CONFIRMACIÓN FINAL CON RESUMEN
     // ========================================================================
@@ -793,6 +849,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             : _observacionesController.text,
         fotoEtiquetas: _fotoEtiqueta, 
         nombreArchivoFoto: _nombreArchivoFoto,
+        codigoColaboradorLote: _codigoColaboradorLoteController.text.trim(),
       );
 
       if (!mounted) return;
@@ -842,6 +899,121 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
       }
     }
   }
+
+  Widget _buildCodigoColaboradorLote() {
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.qr_code_2, color: Colors.indigo, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'CÓDIGO PARA LOTE',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    letterSpacing: 1,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  ' *',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            // Información explicativa
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.indigo.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.indigo.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info, color: Colors.indigo, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'El lote se genera automáticamente',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.indigo.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Formato: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_COLABORADOR',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.indigo.shade700,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Ejemplo: 410-342-96',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.indigo.shade700,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Campo de texto
+            TextFormField(
+              controller: _codigoColaboradorLoteController,
+              decoration: InputDecoration(
+                labelText: 'Código del Colaborador a Cargo',
+                hintText: 'Ej: 96',
+                prefixIcon: Icon(Icons.badge),
+                border: OutlineInputBorder(),
+                helperText: 'Ingresa el código del colaborador responsable',
+              ),
+              keyboardType: TextInputType.text,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [
+                // Permitir solo letras, números, guiones y guiones bajos
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
+              ],
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Ingresa el código del colaborador';
+                }
+                if (value.trim().length > 10) {
+                  return 'Máximo 10 caracteres';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   // Widget helper para el resumen
   Widget _buildResumenItem(IconData icon, String label, String value, Color color) {
@@ -979,9 +1151,14 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             _buildFotoEtiquetas(),
             const SizedBox(height: 24),
 
+            // Código colaborador para lote
+            _buildCodigoColaboradorLote(),
+            const SizedBox(height: 24),
+
             // Observaciones
             _buildObservaciones(),
             const SizedBox(height: 32),
+
 
             // Botón guardar
             SizedBox(

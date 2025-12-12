@@ -779,6 +779,7 @@ class ApiService {
     required int cantidadProducida,
     required List<Map<String, dynamic>> materiasPrimas,
     required List<int> colaboradoresCodigos,
+    required String codigoColaboradorLote,
     List<Map<String, dynamic>>? reprocesos,
     List<Map<String, dynamic>>? mermas,
     String? observaciones,
@@ -798,6 +799,7 @@ class ApiService {
       request.fields['cantidad_producida'] = cantidadProducida.toString();
       request.fields['materias_primas'] = json.encode(materiasPrimas);
       request.fields['colaboradores_codigos'] = json.encode(colaboradoresCodigos);
+      request.fields['codigo_colaborador_lote'] = codigoColaboradorLote;
       
       if (reprocesos != null && reprocesos.isNotEmpty) {
         request.fields['reprocesos_data'] = json.encode(reprocesos);
@@ -1058,25 +1060,6 @@ class ApiService {
       throw Exception('Error de conexión: $e');
     }
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   /// Eliminar token
   Future<void> _clearToken() async {

@@ -6,7 +6,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
-from datetime import date
+from datetime import date, datetime
 from .validators import validate_image_file
 
 
@@ -788,6 +788,16 @@ class Trazabilidad(models.Model):
         validators=[validate_image_file],
         help_text='Foto de las etiquetas utilizadas en la producción'
     )
+    juliano = models.PositiveIntegerField(
+        verbose_name='Día Juliano',
+        help_text='Día juliano del año (1-366). Se calcula automáticamente desde fecha_creacion',
+        editable=False,
+    )
+    lote = models.CharField(
+        max_length=50,
+        verbose_name='Lote',
+        help_text='Lote de producción en formato: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_COLABORADOR. Ejemplo: 410-342-96',
+    )
     
     estado = models.CharField(
         max_length=20,
@@ -822,17 +832,60 @@ class Trazabilidad(models.Model):
         ordering = ['-fecha_creacion']
     
     def __str__(self):
-        return f"Trazabilidad - {self.hoja_procesos.tarea}"
+        return f"Trazabilidad {self.lote} - {self.hoja_procesos.tarea}"
     
     def clean(self):
         """Validaciones personalizadas"""
         super().clean()
+
+        if not self.lote:
+            raise ValidationError({
+                'lote': 'El lote es obligatorio'
+            })
+
+        partes = self.lote.split('-') 
+        if len(partes) != 3:
+            raise ValidationError({
+                'lote': 'El lote debe tener formato: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_COLABORADOR (ej: 410-342-96)'
+            })
         
         if self.estado == 'retenido' and not self.motivo_retencion:
             raise ValidationError({
                 'motivo_retencion': 'El motivo de retención es obligatorio cuando el estado es "Retenido"'
             })
-
+        
+    # Calcular el día juliano
+    @staticmethod
+    def calcular_juliano(fecha):
+        """
+        Calcula el día juliano del año para una fecha dada.
+        
+        Args:
+            fecha: objeto datetime o date
+            
+        Returns:
+            int: Día juliano (1-366)
+            
+        Ejemplo:
+            >>> Trazabilidad.calcular_juliano(datetime(2025, 12, 8))
+            342
+        """
+        return fecha.timetuple().tm_yday
+    
+    def generar_lote(self, codigo_colaborador):
+        """
+        Genera el código de lote en formato: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_COLABORADOR
+        
+        Args:
+            codigo_colaborador: código del colaborador a cargo (str o int)
+            
+        Returns:
+            str: Lote generado. Ejemplo: "410-342-96"
+        """
+        producto_codigo = self.hoja_procesos.tarea.producto.codigo
+        juliano = self.juliano
+        return f"{producto_codigo}-{juliano}-{codigo_colaborador}"
+    
     @property
     def producto_nombre(self):
         """Nombre del producto producido"""

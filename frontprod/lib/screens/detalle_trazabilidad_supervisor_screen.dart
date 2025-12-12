@@ -641,7 +641,6 @@ class _DetalleTrazabilidadSupervisorScreenState
       return const SizedBox.shrink();
     }
 
-    // ✅ VALIDACIÓN MEJORADA: Manejar casos donde producto/linea/turno sean null o no sean Maps
     final producto = tarea['producto'];
     final linea = tarea['linea'];
     final turno = tarea['turno'];
@@ -651,9 +650,11 @@ class _DetalleTrazabilidadSupervisorScreenState
     if (producto == null || producto is! Map<String, dynamic> ||
         linea == null || linea is! Map<String, dynamic> ||
         turno == null || turno is! Map<String, dynamic>) {
-      print('⚠️ Datos de tarea incompletos o en formato inesperado');
       return const SizedBox.shrink();
     }
+
+    final juliano = _trazabilidad!['juliano'];
+    final lote = _trazabilidad!['lote'];
 
     return Card(
       margin: const EdgeInsets.all(16),
@@ -674,10 +675,88 @@ class _DetalleTrazabilidadSupervisorScreenState
             const SizedBox(height: 8),
             
             // ✅ USAR ?? '' para evitar nulls
-            _buildInfoRow('Producto', producto['nombre']?.toString() ?? 'Sin nombre'),
-            _buildInfoRow('Código', producto['codigo']?.toString() ?? 'Sin código'),
-            _buildInfoRow('Línea', linea['nombre']?.toString() ?? 'Sin línea'),
-            _buildInfoRow('Turno', turno['nombre']?.toString() ?? 'Sin turno'),
+            _buildInfoRow('Producto', producto['nombre']?.toString() ?? 'N/A'),
+            _buildInfoRow('Código', producto['codigo']?.toString() ?? 'N/A'),
+
+            const SizedBox(height: 12),
+
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.indigo.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.indigo.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.qr_code_2, color: Colors.indigo, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'LOTE',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.indigo.shade700,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          lote?.toString() ?? 'Sin lote',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.indigo.shade900,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ], 
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Text(
+                  'Día Juliano: ',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade100,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    juliano?.toString() ?? 'N/A',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade900,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 8),
+
+            _buildInfoRow('Línea', linea['nombre']?.toString() ?? 'N/A'),
+            _buildInfoRow('Turno', turno['nombre']?.toString() ?? 'N/A'),
             _buildInfoRow(
               'Fecha', 
               fecha != null 

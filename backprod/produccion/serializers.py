@@ -794,6 +794,8 @@ class TrazabilidadListSerializer(serializers.ModelSerializer):
             'id',
             'hoja_procesos',
             'cantidad_producida',
+            'juliano',
+            'lote',
             'estado',
             'estado_display',
             'observaciones',
@@ -866,6 +868,8 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
             'hoja_procesos',
             'hoja_procesos_detalle',
             'cantidad_producida',
+            'juliano',
+            'lote',
             'foto_etiquetas',
             'foto_etiquetas_url',
             'estado',
@@ -1029,7 +1033,6 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
     reprocesos_data = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     mermas_data = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     foto_etiquetas = serializers.ImageField(required=False, allow_null=True)
-    # NUEVO: Colaboradores que trabajaron realmente
     colaboradores_reales = TrazabilidadColaboradorSerializer(
         many=True,
         read_only=True
@@ -1039,6 +1042,13 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         required=True,
         help_text='Lista de códigos de colaboradores que trabajaron'
     )
+
+    codigo_colaborador_lote = serializers.CharField(
+        write_only=True,
+        required=True,
+        max_length=10,
+        help_text='Código del colaborador a cargo para generar el lote. Ejemplo: 96'
+    )
     
     class Meta:
         model = Trazabilidad
@@ -1046,6 +1056,8 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
             'id',
             'hoja_procesos',
             'cantidad_producida',
+            'juliano',
+            'lote',
             'foto_etiquetas',
             'estado',
             'motivo_retencion',
@@ -1055,8 +1067,22 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
             'mermas_data',
             'colaboradores_reales',  
             'colaboradores_codigos',
+            'codigo_colaborador_lote',
         ]
-        read_only_fields = ['id', 'estado']
+        read_only_fields = ['id', 'estado', 'juliano', 'lote']
+
+    def validate_codigo_colaborador_lote(self, value):
+        """Validar que el código del colaborador sea válido"""
+        if not value or not value.strip():
+            raise serializers.ValidationError('El código del colaborador es obligatorio')
+        
+        # Validar formato (solo números/letras, sin espacios)
+        if not value.replace('-', '').replace('_', '').isalnum():
+            raise serializers.ValidationError(
+                'El código solo puede contener letras, números, guiones y guiones bajos'
+            )
+        
+        return value.strip()
     
     def validate_materias_primas(self, value):
         """Parsear y validar materias primas"""
@@ -1219,11 +1245,12 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         print('CREANDO TRAZABILIDAD')
         print('='*70)
         
-        # Extraer datos relacionados (ya son listas Python, no strings)
+        # Extraer datos relacionados
         materias_primas_data = validated_data.pop('materias_primas', []) or []
         reprocesos_data = validated_data.pop('reprocesos_data', []) or []
         mermas_data = validated_data.pop('mermas_data', []) or []
         colaboradores_codigos = validated_data.pop('colaboradores_codigos')
+        codigo_colaborador_lote = validated_data.pop('codigo_colaborador_lote')
         
         print(f'Hoja Procesos: {validated_data.get("hoja_procesos")}')
         print(f'Cantidad: {validated_data.get("cantidad_producida")}')
@@ -1231,9 +1258,25 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         print(f'Materias primas: {len(materias_primas_data)}')
         print(f'Reprocesos: {len(reprocesos_data)}')
         print(f'Mermas: {len(mermas_data)}')
+        print(f'Código colaborador lote: {codigo_colaborador_lote}')
         
         # Crear trazabilidad
-        trazabilidad = Trazabilidad.objects.create(**validated_data)
+        from datetime import datetime
+        fecha_actual = datetime.now()
+        juliano_calculado = Trazabilidad.calcular_juliano(fecha_actual)
+        print(f'📅 Juliano calculado: {juliano_calculado}')
+
+        trazabilidad = Trazabilidad(**validated_data)
+
+        trazabilidad.juliano = juliano_calculado
+        
+        producto_codigo = trazabilidad.hoja_procesos.tarea.producto.codigo
+        trazabilidad.lote = f"{producto_codigo}-{juliano_calculado}-{codigo_colaborador_lote}"
+        
+        print(f'🏷️  Lote generado: {trazabilidad.lote}')
+        
+        # Guardar trazabilidad
+        trazabilidad.save()
         print(f'✅ Trazabilidad creada: ID {trazabilidad.id}')
         
         # Crear materias primas usadas

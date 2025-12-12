@@ -22,24 +22,37 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   final ApiService _apiService = ApiService();
   final _formKey = GlobalKey<FormState>();
   
-  // Controllers
+  // Controllers principales
   final _cantidadProducidaController = TextEditingController();
   final _observacionesController = TextEditingController();
   final _codigoColaboradorLoteController = TextEditingController();
   
   // Datos de la tarea
   Map<String, dynamic>? _tarea;
-  List<dynamic> _materiasPrimas = [];
-
-  // Gestión de colaboradores
-  List<Map<String, dynamic>> _colaboradoresOriginales = [];
-  List<Map<String, dynamic>> _colaboradoresSeleccionados = [];
-  List<Map<String, dynamic>> _todosColaboradores = [];
   
-  // Datos del formulario
-  Map<int, Map<String, dynamic>> _lotesMP = {}; // {materiaprima_id: {lote, cantidad, unidad}}
-  List<Map<String, dynamic>> _reprocesos = [];
-  List<Map<String, dynamic>> _mermas = [];
+  // ========================================================================
+  // LISTAS DE TODAS LAS MATERIAS PRIMAS Y COLABORADORES DISPONIBLES
+  // ========================================================================
+  List<Map<String, dynamic>> _todasMateriasPrimasDisponibles = [];
+  List<Map<String, dynamic>> _todosColaboradores = [];
+
+  // ========================================================================
+  // MATERIAS PRIMAS SELECCIONADAS (pueden agregarse/eliminarse)
+  // ========================================================================
+  List<String> _materiasPrimasSeleccionadas = []; // Lista de códigos
+  
+  // Gestión de colaboradores seleccionados
+  List<Map<String, dynamic>> _colaboradoresSeleccionados = [];
+  
+  // ========================================================================
+  // DATOS Y CONTROLLERS POR MATERIA PRIMA
+  // ========================================================================
+  Map<String, Map<String, dynamic>> _datosMateriasPrimas = {};
+  Map<String, TextEditingController> _loteControllers = {};
+  Map<String, TextEditingController> _consumoControllers = {};
+  Map<String, TextEditingController> _reprocesoControllers = {};
+  Map<String, TextEditingController> _mermaControllers = {};
+  
   Uint8List? _fotoEtiqueta;
   String? _nombreArchivoFoto;
   
@@ -58,6 +71,12 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     _cantidadProducidaController.dispose();
     _observacionesController.dispose();
     _codigoColaboradorLoteController.dispose();
+    
+    _loteControllers.values.forEach((c) => c.dispose());
+    _consumoControllers.values.forEach((c) => c.dispose());
+    _reprocesoControllers.values.forEach((c) => c.dispose());
+    _mermaControllers.values.forEach((c) => c.dispose());
+    
     super.dispose();
   }
 
@@ -68,28 +87,36 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     });
 
     try {
-      // Cargar tarea con producto y receta
       final tareaData = await _apiService.getTareaDetalle(widget.tareaId);
-
       final todosColabs = await _apiService.getColaboradores();
+      
+      // ========================================================================
+      // CARGAR TODAS LAS MATERIAS PRIMAS DISPONIBLES EN EL SISTEMA
+      // ========================================================================
+      final todasMPData = await _apiService.getMateriasPrimas(); // Necesitas crear este método
       
       setState(() {
         _tarea = tareaData;
-        _materiasPrimas = tareaData['producto_detalle']['materias_primas'] ?? [];
+        
+        // Guardar TODAS las materias primas disponibles
+        _todasMateriasPrimasDisponibles = List<Map<String, dynamic>>.from(
+          todasMPData.map((mp) => {
+            'codigo': mp['codigo'],
+            'nombre': mp['nombre'],
+            'unidad_medida': mp['unidad_medida'] ?? 'kg',
+            'requiere_lote': mp['requiere_lote'] ?? false,
+          })
+        );
 
+        // Colaboradores
         final colaboradoresAsignados = tareaData['colaboradores_asignados'] 
-          ?? tareaData['colaboradores']
-          ?? tareaData['asignados']
+          ?? tareaData['colaboradores'] 
           ?? [];
 
-        // Inicializar colaboradores
-        _colaboradoresOriginales = List<Map<String, dynamic>>.from(
+        _colaboradoresSeleccionados = List<Map<String, dynamic>>.from(
           colaboradoresAsignados.map((c) {
-            // Extraer codigo y garantizar que sea int
             final codigo = c['codigo'];
             final codigoInt = codigo is int ? codigo : int.parse(codigo.toString());
-            
-            print('   📝 Procesando: ${c['nombre']} ${c['apellido']} (codigo: $codigoInt, tipo: ${codigoInt.runtimeType})');
             
             return {
               'codigo': codigoInt,
@@ -98,11 +125,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             };
           })
         );
-
-        // Prellenar con los colaboradores originales
-        _colaboradoresSeleccionados = List<Map<String, dynamic>>.from(_colaboradoresOriginales);
       
-        // Guardar todos los colaboradores disponibles
         _todosColaboradores = List<Map<String, dynamic>>.from(
           todosColabs.map((c) {
             final codigo = c['codigo'];
@@ -115,17 +138,20 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             };
           })
         );
-            
-        // Inicializar mapa de lotes
-        for (var mp in _materiasPrimas) {
-          _lotesMP[mp['codigo'].hashCode] = {
-            'materia_prima_id': mp['codigo'],
-            'lote': '',
-            'cantidad_usada': '',
-            'unidad_medida': 'kg',
-            'requiere_lote': mp['requiere_lote'],
-            'nombre': mp['nombre'],
-          };
+        
+        // ========================================================================
+        // INICIALIZAR CON MATERIAS PRIMAS DE LA RECETA (pero editables)
+        // ========================================================================
+        final materiasPrimasReceta = tareaData['producto_detalle']['materias_primas'] ?? [];
+        
+        for (var mp in materiasPrimasReceta) {
+          final codigo = mp['codigo'].toString();
+          _agregarMateriaPrimaInterna(
+            codigo: codigo,
+            nombre: mp['nombre'],
+            unidadMedida: mp['unidad_medida'] ?? 'kg',
+            requiereLote: mp['requiere_lote'],
+          );
         }
         
         _isLoading = false;
@@ -137,14 +163,88 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
       });
     }
   }
-  
-  // ========================================================================
-  // NUEVOS MÉTODOS: Gestión de colaboradores
-  // ========================================================================
 
-  void _eliminarColaborador(int index) {
-    final colab = _colaboradoresSeleccionados[index];
-    final nombreCompleto = '${colab['nombre']} ${colab['apellido']}';
+  // ========================================================================
+  // AGREGAR MATERIA PRIMA (método interno)
+  // ========================================================================
+  void _agregarMateriaPrimaInterna({
+    required String codigo,
+    required String nombre,
+    required String unidadMedida,
+    required bool requiereLote,
+  }) {
+    // Evitar duplicados
+    if (_materiasPrimasSeleccionadas.contains(codigo)) {
+      return;
+    }
+    
+    _materiasPrimasSeleccionadas.add(codigo);
+    
+    // Crear controllers
+    _loteControllers[codigo] = TextEditingController();
+    _consumoControllers[codigo] = TextEditingController();
+    _reprocesoControllers[codigo] = TextEditingController(text: '0');
+    _mermaControllers[codigo] = TextEditingController(text: '0');
+    
+    // Guardar datos
+    _datosMateriasPrimas[codigo] = {
+      'materia_prima_id': codigo,
+      'nombre': nombre,
+      'unidad_medida': unidadMedida,
+      'requiere_lote': requiereLote,
+    };
+  }
+
+  // ========================================================================
+  // AGREGAR MATERIA PRIMA (desde diálogo)
+  // ========================================================================
+  Future<void> _agregarMateriaPrima() async {
+    // Filtrar materias primas que ya están seleccionadas
+    final mpDisponibles = _todasMateriasPrimasDisponibles.where((mp) {
+      return !_materiasPrimasSeleccionadas.contains(mp['codigo']);
+    }).toList();
+    
+    if (mpDisponibles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No hay más materias primas disponibles para agregar'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    final mpSeleccionada = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _DialogSeleccionarMateriaPrima(
+        materiasPrimas: mpDisponibles,
+      ),
+    );
+    
+    if (mpSeleccionada != null) {
+      setState(() {
+        _agregarMateriaPrimaInterna(
+          codigo: mpSeleccionada['codigo'],
+          nombre: mpSeleccionada['nombre'],
+          unidadMedida: mpSeleccionada['unidad_medida'],
+          requiereLote: mpSeleccionada['requiere_lote'],
+        );
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${mpSeleccionada['nombre']} agregada'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  // ========================================================================
+  // ELIMINAR MATERIA PRIMA
+  // ========================================================================
+  void _eliminarMateriaPrima(String codigo) {
+    final mp = _datosMateriasPrimas[codigo];
     
     showDialog(
       context: context,
@@ -153,45 +253,64 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
           children: [
             Icon(Icons.warning, color: Colors.orange),
             SizedBox(width: 8),
-            Text('Eliminar Colaborador'),
+            Text('Eliminar Materia Prima'),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('¿Estás seguro de eliminar a este colaborador?'),
-            SizedBox(height: 16),
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.person, color: Colors.grey[700]),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          nombreCompleto,
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          'Código: ${colab['codigo']}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        content: Text(
+          '¿Estás seguro de eliminar "${mp!['nombre']}"?\n\n'
+          'Se perderán todos los datos ingresados para esta materia prima.'
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                // Eliminar de la lista
+                _materiasPrimasSeleccionadas.remove(codigo);
+                
+                // Limpiar datos y controllers
+                _datosMateriasPrimas.remove(codigo);
+                _loteControllers[codigo]?.dispose();
+                _consumoControllers[codigo]?.dispose();
+                _reprocesoControllers[codigo]?.dispose();
+                _mermaControllers[codigo]?.dispose();
+                
+                _loteControllers.remove(codigo);
+                _consumoControllers.remove(codigo);
+                _reprocesoControllers.remove(codigo);
+                _mermaControllers.remove(codigo);
+              });
+              
+              Navigator.pop(context);
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Materia prima eliminada'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ========================================================================
+  // GESTIÓN DE COLABORADORES (sin cambios)
+  // ========================================================================
+  
+  void _eliminarColaborador(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Eliminar Colaborador'),
+        content: Text('¿Estás seguro?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -203,14 +322,8 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                 _colaboradoresSeleccionados.removeAt(index);
               });
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Colaborador eliminado'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: Text('Eliminar'),
           ),
         ],
@@ -219,7 +332,6 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   }
   
   Future<void> _agregarColaborador() async {
-    // Filtrar colaboradores que ya están seleccionados
     final colaboradoresDisponibles = _todosColaboradores.where((colab) {
       return !_colaboradoresSeleccionados.any(
         (sel) => sel['codigo'] == colab['codigo']
@@ -247,18 +359,13 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
       setState(() {
         _colaboradoresSeleccionados.add(colaboradorSeleccionado);
       });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Colaborador ${colaboradorSeleccionado['nombre']} ${colaboradorSeleccionado['apellido']} agregado'
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
     }
   }
 
+  // ========================================================================
+  // FOTO
+  // ========================================================================
+  
   Future<void> _tomarFoto() async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -309,475 +416,118 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     }
   }
 
-  void _agregarReproceso() {
-    showDialog(
-      context: context,
-      builder: (context) => _DialogReproceso(
-        onAgregar: (reproceso) {
-          setState(() {
-            _reprocesos.add(reproceso);
-          });
-        },
-      ),
-    );
-  }
-
-  void _agregarMerma() {
-    showDialog(
-      context: context,
-      builder: (context) => _DialogMerma(
-        onAgregar: (merma) {
-          setState(() {
-            _mermas.add(merma);
-          });
-        },
-      ),
-    );
-  }
-
+  // ========================================================================
+  // GUARDAR TRAZABILIDAD
+  // ========================================================================
+  
   Future<void> _guardarTrazabilidad() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    // ========================================================================
-    // VALIDACIÓN: Verificar que haya al menos un colaborador
-    // ========================================================================
+    // Validar colaboradores
     if (_colaboradoresSeleccionados.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.red, size: 32),
-              SizedBox(width: 12),
-              Text('Sin Colaboradores'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Debe haber al menos un colaborador asignado a la trazabilidad.',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.people, color: Colors.red),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Agrega al menos un colaborador que haya trabajado en esta producción',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _agregarColaborador();
-              },
-              icon: Icon(Icons.person_add),
-              label: Text('Agregar Colaborador'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            ),
-          ],
-        ),
-      );
+      _mostrarError('Debe haber al menos un colaborador');
       return;
     }
 
-    // ========================================================================
-    // VALIDACIÓN: Verificar que todas las materias primas tengan cantidad
-    // ========================================================================
-    int mpSinCantidad = 0;
-    int mpSinLote = 0;
-    String? primeraMPSinCantidad;
-    String? primeraMPSinLote;
-
-    for (var entry in _lotesMP.entries) {
-      final mp = entry.value;
-      final nombreMP = mp['nombre'] ?? mp['materia_prima_id'];
-
-      // Verificar cantidad
-      if (mp['cantidad_usada'].toString().isEmpty || 
-          mp['cantidad_usada'].toString() == '0' ||
-          mp['cantidad_usada'].toString() == '0.0') {
-        mpSinCantidad++;
-        if (primeraMPSinCantidad == null) {
-          primeraMPSinCantidad = nombreMP;
-        }
-      }
-
-      // Verificar lote si lo requiere
-      if (mp['requiere_lote'] == true && 
-          (mp['lote'] == null || mp['lote'].toString().trim().isEmpty)) {
-        mpSinLote++;
-        if (primeraMPSinLote == null) {
-          primeraMPSinLote = nombreMP;
-        }
-      }
-    }
-
-    // Mostrar error si faltan cantidades
-    if (mpSinCantidad > 0) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.red, size: 32),
-              SizedBox(width: 12),
-              Expanded(child: Text('Faltan Cantidades')),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Debes ingresar la cantidad usada de TODAS las materias primas.',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.warning, color: Colors.red, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Materias primas sin cantidad: $mpSinCantidad',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red.shade900,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (primeraMPSinCantidad != null) ...[
-                      SizedBox(height: 8),
-                      Text(
-                        'Ejemplo: $primeraMPSinCantidad',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              SizedBox(height: 12),
-              Text(
-                '⚠️ No se puede continuar sin completar todas las cantidades.',
-                style: TextStyle(
-                  fontSize: 14, 
-                  color: Colors.grey[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
-              child: Text('Entendido'),
-            ),
-          ],
-        ),
-      );
+    // Validar que haya al menos una materia prima
+    if (_materiasPrimasSeleccionadas.isEmpty) {
+      _mostrarError('Debe haber al menos una materia prima registrada');
       return;
     }
 
-    // Mostrar error si faltan lotes
-    if (mpSinLote > 0) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.warning, color: Colors.orange, size: 32),
-              SizedBox(width: 12),
-              Expanded(child: Text('Faltan Lotes')),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Algunas materias primas requieren lote OBLIGATORIAMENTE.',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.inventory_2, color: Colors.orange, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Materias primas sin lote: $mpSinLote',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade900,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (primeraMPSinLote != null) ...[
-                      SizedBox(height: 8),
-                      Text(
-                        'Ejemplo: $primeraMPSinLote',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              SizedBox(height: 12),
-              Text(
-                'Busca el lote en el empaque de la materia prima.',
-                style: TextStyle(
-                  fontSize: 14, 
-                  color: Colors.grey[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-              ),
-              child: Text('Entendido'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    // ========================================================================
-    // VALIDACIÓN: Verificar foto
-    // ========================================================================
-    if (_fotoEtiqueta == null) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.camera_alt, color: Colors.blue, size: 32),
-              SizedBox(width: 12),
-              Text('Falta Foto'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Debes tomar una foto de las etiquetas utilizadas en la producción.',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'La foto es obligatoria para la trazabilidad',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancelar'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _tomarFoto();
-              },
-              icon: Icon(Icons.camera_alt),
-              label: Text('Tomar Foto Ahora'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
+    // Validar código para lote
     if (_codigoColaboradorLoteController.text.trim().isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.red, size: 32),
-              SizedBox(width: 12),
-              Text('Falta Código de Lote'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Debes ingresar el código del colaborador a cargo para generar el lote.',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 16),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.qr_code, color: Colors.red),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Este código se usa para formar el lote: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_COLABORADOR',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: Text('Entendido'),
-            ),
-          ],
-        ),
-      );
+      _mostrarError('Ingresa el código del colaborador para el lote');
+      return;
+    }
+
+    // Validar foto
+    if (_fotoEtiqueta == null) {
+      _mostrarError('Debes tomar una foto de las etiquetas');
       return;
     }
 
     // ========================================================================
-    // CONFIRMACIÓN FINAL CON RESUMEN
+    // CONSTRUIR DATOS DE MATERIAS PRIMAS CON REPROCESOS Y MERMAS
     // ========================================================================
-    int mpConDatos = 0;
-    _lotesMP.forEach((key, value) {
-      if (value['cantidad_usada'].toString().isNotEmpty && 
-          value['cantidad_usada'].toString() != '0' &&
-          value['cantidad_usada'].toString() != '0.0') {
-        mpConDatos++;
+    List<Map<String, dynamic>> materiasPrimasData = [];
+    
+    for (String codigo in _materiasPrimasSeleccionadas) {
+      final mp = _datosMateriasPrimas[codigo]!;
+      
+      final consumo = _consumoControllers[codigo]!.text.trim();
+      
+      // Validar que tenga cantidad
+      if (consumo.isEmpty || consumo == '0') {
+        _mostrarError('Completa la cantidad de ${mp['nombre']}');
+        return;
       }
-    });
 
+      // Validar lote si lo requiere
+      if (mp['requiere_lote'] == true) {
+        final lote = _loteControllers[codigo]!.text.trim();
+        if (lote.isEmpty) {
+          _mostrarError('${mp['nombre']} requiere lote');
+          return;
+        }
+      }
+
+      // Construir datos de esta materia prima
+      Map<String, dynamic> mpData = {
+        'materia_prima_id': codigo,
+        'lote': _loteControllers[codigo]!.text.trim(),
+        'cantidad_usada': double.parse(consumo),
+        'unidad_medida': mp['unidad_medida'],
+      };
+
+      // Agregar reprocesos si tiene
+      final reprocesoText = _reprocesoControllers[codigo]!.text.trim();
+      if (reprocesoText.isNotEmpty && reprocesoText != '0') {
+        final cantidad = double.tryParse(reprocesoText);
+        if (cantidad != null && cantidad > 0) {
+          mpData['reprocesos'] = [
+            {
+              'cantidad': cantidad,
+              'causas': 'error_operador',
+            }
+          ];
+        }
+      }
+
+      // Agregar mermas si tiene
+      final mermaText = _mermaControllers[codigo]!.text.trim();
+      if (mermaText.isNotEmpty && mermaText != '0') {
+        final cantidad = double.tryParse(mermaText);
+        if (cantidad != null && cantidad > 0) {
+          mpData['mermas'] = [
+            {
+              'cantidad': cantidad,
+              'causas': 'desperdicio_corte',
+            }
+          ];
+        }
+      }
+
+      materiasPrimasData.add(mpData);
+    }
+
+    // Mostrar confirmación
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('✅ Confirmar Trazabilidad'),
+        title: Text('Confirmar Trazabilidad'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '¿Estás seguro de guardar la trazabilidad?',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 20),
-            _buildResumenItem(
-              Icons.production_quantity_limits,
-              'Cantidad producida',
-              '${_cantidadProducidaController.text} unidades',
-              Colors.green,
-            ),
-            Divider(),
-            _buildResumenItem(
-              Icons.people,
-              'Colaboradores',
-              '${_colaboradoresSeleccionados.length}',
-              Colors.indigo,
-            ),
-            Divider(),
-            _buildResumenItem(
-              Icons.inventory_2,
-              'Materias primas',
-              '$mpConDatos registradas',
-              Colors.blue,
-            ),
-            if (_reprocesos.isNotEmpty) ...[
-              Divider(),
-              _buildResumenItem(
-                Icons.replay,
-                'Reprocesos',
-                '${_reprocesos.length}',
-                Colors.orange,
-              ),
-            ],
-            if (_mermas.isNotEmpty) ...[
-              Divider(),
-              _buildResumenItem(
-                Icons.delete_outline,
-                'Mermas',
-                '${_mermas.length}',
-                Colors.red,
-              ),
-            ],
-            Divider(),
-            _buildResumenItem(
-              Icons.photo_camera,
-              'Foto de etiquetas',
-              'Adjuntada ✓',
-              Colors.purple,
-            ),
+            Text('¿Guardar la trazabilidad con:'),
+            SizedBox(height: 12),
+            Text('• Cantidad: ${_cantidadProducidaController.text} unidades'),
+            Text('• Colaboradores: ${_colaboradoresSeleccionados.length}'),
+            Text('• Materias primas: ${materiasPrimasData.length}'),
+            Text('• Foto: Adjuntada'),
           ],
         ),
         actions: [
@@ -785,13 +535,9 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: Text('Cancelar'),
           ),
-          ElevatedButton.icon(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            icon: Icon(Icons.check_circle),
-            label: Text('Confirmar y Guardar'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
+            child: Text('Confirmar'),
           ),
         ],
       ),
@@ -804,57 +550,25 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     });
 
     try {
-      // Preparar datos de materias primas
-      List<Map<String, dynamic>> materiasPrimasData = [];
-      
-      _lotesMP.forEach((key, value) {
-        if (value['cantidad_usada'].toString().isNotEmpty) {
-          materiasPrimasData.add({
-            'materia_prima_id': value['materia_prima_id'],
-            'lote': value['lote'].isEmpty ? null : value['lote'],
-            'cantidad_usada': double.parse(value['cantidad_usada']),
-            'unidad_medida': value['unidad_medida'],
-          });
-        }
-      });
+      List<int> colaboradoresCodigos = _colaboradoresSeleccionados
+          .map((c) => c['codigo'] as int)
+          .toList();
 
-      // Preparar IDs de colaboradores
-      List<int> colaboradoresCodigos = [];
-
-      for (var colab in _colaboradoresSeleccionados) {
-        final codigo = colab['codigo'];
-        int codigoInt;
-        
-        if (codigo is int) {
-          codigoInt = codigo;
-        } else if (codigo is String) {
-          codigoInt = int.parse(codigo);
-        } else {
-          throw Exception('Código de colaborador inválido: $codigo (tipo: ${codigo.runtimeType})');
-        }
-        
-        colaboradoresCodigos.add(codigoInt);
-      }
-
-      // Crear trazabilidad
-      final trazabilidadData = await _apiService.crearTrazabilidad(
+      await _apiService.crearTrazabilidad(
         hojaProcesosId: widget.hojaProcesosId,
         cantidadProducida: int.parse(_cantidadProducidaController.text),
         materiasPrimas: materiasPrimasData,
         colaboradoresCodigos: colaboradoresCodigos,
-        reprocesos: _reprocesos.isNotEmpty ? _reprocesos : null,
-        mermas: _mermas.isNotEmpty ? _mermas : null,
         observaciones: _observacionesController.text.isEmpty 
             ? null 
             : _observacionesController.text,
-        fotoEtiquetas: _fotoEtiqueta, 
+        fotoEtiquetas: _fotoEtiqueta,
         nombreArchivoFoto: _nombreArchivoFoto,
         codigoColaboradorLote: _codigoColaboradorLoteController.text.trim(),
       );
 
       if (!mounted) return;
 
-      // Mostrar éxito
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -862,19 +576,16 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
           title: Row(
             children: [
               Icon(Icons.check_circle, color: Colors.green, size: 32),
-              const SizedBox(width: 12),
-              Text('¡Trazabilidad Guardada!'),
+              SizedBox(width: 12),
+              Text('¡Éxito!'),
             ],
           ),
-          content: Text(
-            'La trazabilidad se ha guardado correctamente.\n\n'
-            'Ahora será revisada por el supervisor y control de calidad.',
-          ),
+          content: Text('Trazabilidad guardada correctamente'),
           actions: [
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(context); // Cerrar diálogo
-                Navigator.popUntil(context, (route) => route.isFirst); // Volver al inicio
+                Navigator.pop(context);
+                Navigator.popUntil(context, (route) => route.isFirst);
               },
               child: Text('Finalizar'),
             ),
@@ -884,13 +595,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
 
     } catch (e) {
       if (!mounted) return;
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al guardar: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _mostrarError('Error al guardar: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -900,154 +605,18 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     }
   }
 
-  Widget _buildCodigoColaboradorLote() {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.qr_code_2, color: Colors.indigo, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'CÓDIGO PARA LOTE',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  ' *',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            
-            // Información explicativa
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.indigo.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.indigo.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info, color: Colors.indigo, size: 16),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'El lote se genera automáticamente',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.indigo.shade900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Formato: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_COLABORADOR',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.indigo.shade700,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Ejemplo: 410-342-96',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.indigo.shade700,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Campo de texto
-            TextFormField(
-              controller: _codigoColaboradorLoteController,
-              decoration: InputDecoration(
-                labelText: 'Código del Colaborador a Cargo',
-                hintText: 'Ej: 96',
-                prefixIcon: Icon(Icons.badge),
-                border: OutlineInputBorder(),
-                helperText: 'Ingresa el código del colaborador responsable',
-              ),
-              keyboardType: TextInputType.text,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [
-                // Permitir solo letras, números, guiones y guiones bajos
-                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
-              ],
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Ingresa el código del colaborador';
-                }
-                if (value.trim().length > 10) {
-                  return 'Máximo 10 caracteres';
-                }
-                return null;
-              },
-            ),
-          ],
-        ),
+  void _mostrarError(String mensaje) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: Colors.red,
       ),
     );
   }
 
-
-  // Widget helper para el resumen
-  Widget _buildResumenItem(IconData icon, String label, String value, Color color) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: color),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ========================================================================
+  // BUILD UI
+  // ========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -1058,7 +627,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Text('Cargando trazabilidad...'),
             ],
           ),
@@ -1074,9 +643,9 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.error_outline, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Text('Error al cargar'),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text(_error!, textAlign: TextAlign.center),
             ],
           ),
@@ -1086,81 +655,26 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Trazabilidad'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () async {
-            final confirmar = await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: Text('⚠️ Advertencia'),
-                content: Text(
-                  'Si sales ahora, perderás todos los datos ingresados.\n\n'
-                  '¿Estás seguro?',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('Cancelar'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                    child: Text('Salir sin guardar'),
-                  ),
-                ],
-              ),
-            );
-
-            if (confirmar == true && mounted) {
-              Navigator.pop(context);
-            }
-          },
-        ),
+        title: Text('Registro Trazabilidad'),
+        backgroundColor: Colors.indigo,
       ),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: EdgeInsets.all(16),
           children: [
-            // Info del producto
-            _buildProductoInfo(),
-            const SizedBox(height: 24),
-
-            // Cantidad producida
-            _buildCantidadProducida(),
-            const SizedBox(height: 24),
-
-            // Sección de colaboradores
-            _buildColaboradores(),
-            const SizedBox(height: 24),
-
-            // Materias primas
-            _buildMateriasPrimas(),
-            const SizedBox(height: 24),
-
-            // Reprocesos
-            _buildReprocesos(),
-            const SizedBox(height: 24),
-
-            // Mermas
-            _buildMermas(),
-            const SizedBox(height: 24),
-
-            // Foto de etiquetas
-            _buildFotoEtiquetas(),
-            const SizedBox(height: 24),
-
-            // Código colaborador para lote
-            _buildCodigoColaboradorLote(),
-            const SizedBox(height: 24),
-
-            // Observaciones
+            _buildEncabezado(),
+            SizedBox(height: 24),
+            _buildTablaColaboradores(),
+            SizedBox(height: 24),
+            _buildTablaMateriales(), // 🔥 ACTUALIZADA
+            SizedBox(height: 24),
+            _buildSeccionFoto(),
+            SizedBox(height: 24),
+            _buildCodigoLote(),
+            SizedBox(height: 24),
             _buildObservaciones(),
-            const SizedBox(height: 32),
-
-
-            // Botón guardar
+            SizedBox(height: 32),
             SizedBox(
               height: 56,
               child: ElevatedButton.icon(
@@ -1177,6 +691,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -1189,40 +704,143 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     );
   }
 
-  Widget _buildProductoInfo() {
+  // ========================================================================
+  // WIDGETS DE SECCIONES (Encabezado sin cambios)
+  // ========================================================================
+
+  Widget _buildEncabezado() {
     return Card(
+      elevation: 4,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'PRODUCTO',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                letterSpacing: 1,
+            Center(
+              child: Text(
+                'REGISTRO TRAZABILIDAD',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              _tarea!['producto_detalle']['nombre'],
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Código: ${_tarea!['producto_detalle']['codigo']}',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 12),
+            Divider(height: 24),
+            
             Row(
               children: [
-                Icon(Icons.flag, size: 16, color: Colors.blue),
-                const SizedBox(width: 4),
-                Text('Meta: ${_tarea!['meta_produccion']} unidades'),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('F. ELAB.', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text(_tarea!['fecha'] ?? ''),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('JULIANO:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('Auto'),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('TURNO:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text(_tarea!['turno_detalle']['nombre'] ?? ''),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            
+            SizedBox(height: 16),
+            
+            Text('LOTE:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('(Se generará al guardar)'),
+            
+            Divider(height: 24),
+            
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('CÓDIGO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(
+                        _tarea!['producto_detalle']['codigo'],
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PRODUCTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(
+                        _tarea!['producto_detalle']['nombre'],
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('UdM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text('UN'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            
+            SizedBox(height: 12),
+            
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PLAN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(_tarea!['meta_produccion'].toString()),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('REAL *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      TextFormField(
+                        controller: _cantidadProducidaController,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Requerido';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ],
@@ -1231,422 +849,275 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     );
   }
 
-  Widget _buildCantidadProducida() {
+  Widget _buildTablaColaboradores() {
     return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'CANTIDAD PRODUCIDA *',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _cantidadProducidaController,
-              decoration: InputDecoration(
-                labelText: 'Cantidad',
-                suffixText: 'unidades',
-                prefixIcon: Icon(Icons.production_quantity_limits),
-              ),
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Ingresa la cantidad producida';
-                }
-                if (int.tryParse(value) == null) {
-                  return 'Ingresa un número válido';
-                }
-                return null;
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildColaboradores() {
-    return Card(
+      elevation: 4,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.people, color: Colors.indigo),
-                SizedBox(width: 8),
                 Text(
                   'COLABORADORES',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                Text(
-                  ' *',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Spacer(),
-                TextButton.icon(
+                IconButton(
+                  icon: Icon(Icons.person_add, color: Colors.blue),
                   onPressed: _agregarColaborador,
-                  icon: Icon(Icons.person_add, size: 18),
-                  label: Text('Agregar'),
+                  tooltip: 'Agregar',
                 ),
               ],
             ),
-            SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info, color: Colors.blue, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Indica quiénes trabajaron realmente en esta producción',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade900,
-                      ),
+            Divider(),
+            
+            Table(
+              border: TableBorder.all(color: Colors.black, width: 1),
+              columnWidths: {
+                0: FlexColumnWidth(1),
+                1: FlexColumnWidth(2),
+              },
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: Colors.grey.shade200),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Text('CÓDIGO', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
-                  ),
-                ],
-              ),
+                    Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Text('NOMBRE', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                ..._colaboradoresSeleccionados.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final colab = entry.value;
+                  return TableRow(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text(colab['codigo'].toString()),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text('${colab['nombre']} ${colab['apellido']}'),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.delete, size: 18, color: Colors.red),
+                              onPressed: () => _eliminarColaborador(index),
+                              padding: EdgeInsets.zero,
+                              constraints: BoxConstraints(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+                ...List.generate(4 - _colaboradoresSeleccionados.length, (i) {
+                  return TableRow(
+                    children: [
+                      Padding(padding: EdgeInsets.all(8), child: Text('')),
+                      Padding(padding: EdgeInsets.all(8), child: Text('')),
+                    ],
+                  );
+                }),
+              ],
             ),
-            const SizedBox(height: 12),
-            if (_colaboradoresSeleccionados.isEmpty)
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ========================================================================
+  // 🔥 TABLA DE MATERIALES CON BOTÓN AGREGAR Y ELIMINAR
+  // ========================================================================
+  
+  Widget _buildTablaMateriales() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'MATERIALES',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: Icon(Icons.add_box, color: Colors.green),
+                  onPressed: _agregarMateriaPrima,
+                  tooltip: 'Agregar Materia Prima',
+                ),
+              ],
+            ),
+            Divider(),
+            
+            // Mensaje si no hay materias primas
+            if (_materiasPrimasSeleccionadas.isEmpty)
               Center(
                 child: Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      Icon(Icons.person_off, size: 48, color: Colors.grey),
-                      SizedBox(height: 8),
+                      Icon(Icons.inventory_2, size: 64, color: Colors.grey),
+                      SizedBox(height: 12),
                       Text(
-                        'No hay colaboradores asignados',
-                        style: TextStyle(color: Colors.grey),
+                        'No hay materias primas registradas',
+                        style: TextStyle(color: Colors.grey[600]),
                       ),
-                      SizedBox(height: 8),
+                      SizedBox(height: 12),
                       ElevatedButton.icon(
-                        onPressed: _agregarColaborador,
-                        icon: Icon(Icons.person_add),
-                        label: Text('Agregar Colaborador'),
+                        onPressed: _agregarMateriaPrima,
+                        icon: Icon(Icons.add),
+                        label: Text('Agregar Primera Materia Prima'),
                       ),
                     ],
                   ),
                 ),
               )
             else
-              ..._colaboradoresSeleccionados.asMap().entries.map((entry) {
-                final index = entry.key;
-                final colab = entry.value;
-                final nombreCompleto = '${colab['nombre']} ${colab['apellido']}';
-                
-                return Container(
-                  margin: EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.white,
-                  ),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.indigo,
-                      child: Text(
-                        colab['nombre'].toString()[0].toUpperCase(),
-                        style: TextStyle(color: Colors.white),
-                      ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Table(
+                  border: TableBorder.all(color: Colors.black, width: 1),
+                  defaultColumnWidth: IntrinsicColumnWidth(),
+                  children: [
+                    // Header
+                    TableRow(
+                      decoration: BoxDecoration(color: Colors.grey.shade200),
+                      children: [
+                        _buildHeaderCell(''),
+                        _buildHeaderCell('CÓDIGO'),
+                        _buildHeaderCell('DESCRIPCIÓN'),
+                        _buildHeaderCell('UdM'),
+                        _buildHeaderCell('LOTE'),
+                        _buildHeaderCell('CONSUMO'),
+                        _buildHeaderCell('REPROCESO'),
+                        _buildHeaderCell('MERMA'),
+                      ],
                     ),
-                    title: Text(
-                      nombreCompleto,
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text('Código: ${colab['codigo']}'),
-                    trailing: IconButton(
-                      icon: Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _eliminarColaborador(index),
-                      tooltip: 'Eliminar',
-                    ),
-                  ),
-                );
-              }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMateriasPrimas() {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'MATERIAS PRIMAS',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_materiasPrimas.isEmpty)
-              Center(
-                child: Text(
-                  'No hay materias primas definidas',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              )
-            else
-              ..._materiasPrimas.map((mp) {
-                final key = mp['codigo'].hashCode;
-                return _buildMateriaPrimaItem(mp, key);
-              }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMateriaPrimaItem(Map<String, dynamic> mp, int key) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  mp['nombre'],
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              if (mp['requiere_lote'])
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Requiere Lote',
-                    style: TextStyle(fontSize: 10, color: Colors.blue.shade700),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Código: ${mp['codigo']}',
-            style: TextStyle(color: Colors.grey[600], fontSize: 12),
-          ),
-          const SizedBox(height: 12),
-          if (mp['requiere_lote'])
-            TextFormField(
-              decoration: InputDecoration(
-                labelText: 'Lote',
-                hintText: 'Ej: LOT12345',
-                isDense: true,
-              ),
-              onChanged: (value) {
-                _lotesMP[key]!['lote'] = value;
-              },
-            ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: TextFormField(
-                  decoration: InputDecoration(
-                    labelText: 'Cantidad',
-                    isDense: true,
-                  ),
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                  onChanged: (value) {
-                    _lotesMP[key]!['cantidad_usada'] = value;
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<String>(
-                  value: _lotesMP[key]!['unidad_medida'],
-                  decoration: InputDecoration(
-                    labelText: 'Unidad',
-                    isDense: true,
-                  ),
-                  items: [
-                    DropdownMenuItem(value: 'kg', child: Text('kg')),
-                    DropdownMenuItem(value: 'unidades', child: Text('unidades')),
+                    // Filas de materias primas
+                    ..._materiasPrimasSeleccionadas.map((codigo) {
+                      final mp = _datosMateriasPrimas[codigo]!;
+                      
+                      return TableRow(
+                        children: [
+                          // 🔥 COLUMNA DE ELIMINAR
+                          _buildDataCell(
+                            IconButton(
+                              icon: Icon(Icons.delete, size: 18, color: Colors.red),
+                              onPressed: () => _eliminarMateriaPrima(codigo),
+                              padding: EdgeInsets.zero,
+                              constraints: BoxConstraints(),
+                              tooltip: 'Eliminar',
+                            ),
+                          ),
+                          _buildDataCell(Text(codigo)),
+                          _buildDataCell(Text(mp['nombre'])),
+                          _buildDataCell(Text(mp['unidad_medida'])),
+                          _buildDataCell(
+                            SizedBox(
+                              width: 100,
+                              child: TextFormField(
+                                controller: _loteControllers[codigo],
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                ),
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                          _buildDataCell(
+                            SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                controller: _consumoControllers[codigo],
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                ),
+                                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                          _buildDataCell(
+                            SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                controller: _reprocesoControllers[codigo],
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                ),
+                                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                          _buildDataCell(
+                            SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                controller: _mermaControllers[codigo],
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                ),
+                                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
                   ],
-                  onChanged: (value) {
-                    setState(() {
-                      _lotesMP[key]!['unidad_medida'] = value!;
-                    });
-                  },
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReprocesos() {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'REPROCESOS (Opcional)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: _agregarReproceso,
-                  icon: Icon(Icons.add),
-                  label: Text('Agregar'),
-                ),
-              ],
-            ),
-            if (_reprocesos.isEmpty)
-              Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'No hay reprocesos registrados',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              )
-            else
-              ..._reprocesos.asMap().entries.map((entry) {
-                final index = entry.key;
-                final reproceso = entry.value;
-                return ListTile(
-                  leading: CircleAvatar(child: Text('${index + 1}')),
-                  title: Text('${reproceso['cantidad_kg']} kg'),
-                  subtitle: Text(reproceso['descripcion']),
-                  trailing: IconButton(
-                    icon: Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      setState(() {
-                        _reprocesos.removeAt(index);
-                      });
-                    },
-                  ),
-                );
-              }),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMermas() {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'MERMAS (Opcional)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: _agregarMerma,
-                  icon: Icon(Icons.add),
-                  label: Text('Agregar'),
-                ),
-              ],
-            ),
-            if (_mermas.isEmpty)
-              Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'No hay mermas registradas',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              )
-            else
-              ..._mermas.asMap().entries.map((entry) {
-                final index = entry.key;
-                final merma = entry.value;
-                return ListTile(
-                  leading: CircleAvatar(child: Text('${index + 1}')),
-                  title: Text('${merma['cantidad_kg']} kg'),
-                  subtitle: Text(merma['descripcion']),
-                  trailing: IconButton(
-                    icon: Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      setState(() {
-                        _mermas.removeAt(index);
-                      });
-                    },
-                  ),
-                );
-              }),
-          ],
-        ),
+  Widget _buildHeaderCell(String text) {
+    return Padding(
+      padding: EdgeInsets.all(8),
+      child: Text(
+        text,
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        textAlign: TextAlign.center,
       ),
     );
   }
 
-  Widget _buildFotoEtiquetas() {
+  Widget _buildDataCell(Widget child) {
+    return Padding(
+      padding: EdgeInsets.all(8),
+      child: child,
+    );
+  }
+
+  // Resto de widgets sin cambios...
+  
+  Widget _buildSeccionFoto() {
     return Card(
+      elevation: 4,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
@@ -1654,32 +1125,25 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
           children: [
             Text(
               'FOTO DE ETIQUETAS *',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                letterSpacing: 1,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+            Divider(),
+            
             if (_fotoEtiqueta == null)
               Column(
                 children: [
-                  Text(
-                    'Debes tomar una foto de las etiquetas utilizadas',
-                    style: TextStyle(color: Colors.grey[600]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
+                  Text('Debes tomar una foto de las etiquetas'),
+                  SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _tomarFoto,
                           icon: Icon(Icons.camera_alt),
-                          label: Text('Tomar Foto'),
+                          label: Text('Cámara'),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _seleccionarFotoGaleria,
@@ -1703,17 +1167,17 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                       fit: BoxFit.cover,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _tomarFoto,
                           icon: Icon(Icons.refresh),
-                          label: Text('Tomar otra'),
+                          label: Text('Cambiar'),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () {
@@ -1738,26 +1202,60 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     );
   }
 
-  Widget _buildObservaciones() {
+  Widget _buildCodigoLote() {
     return Card(
+      elevation: 4,
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'OBSERVACIONES (Opcional)',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                letterSpacing: 1,
-              ),
+              'CÓDIGO COLABORADOR LOTE *',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+            Divider(),
+            TextFormField(
+              controller: _codigoColaboradorLoteController,
+              decoration: InputDecoration(
+                labelText: 'Código del colaborador a cargo',
+                hintText: 'Ej: 96',
+                border: OutlineInputBorder(),
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
+              ],
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Requerido';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildObservaciones() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'OBSERVACIONES',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            Divider(),
             TextFormField(
               controller: _observacionesController,
               decoration: InputDecoration(
-                hintText: 'Escribe observaciones adicionales...',
+                hintText: 'Observaciones adicionales...',
+                border: OutlineInputBorder(),
               ),
               maxLines: 3,
               maxLength: 500,
@@ -1770,8 +1268,9 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
 }
 
 // ============================================================================
-// DIALOG: Seleccionar Colaborador
+// DIÁLOGOS
 // ============================================================================
+
 class _DialogSeleccionarColaborador extends StatefulWidget {
   final List<Map<String, dynamic>> colaboradores;
 
@@ -1813,8 +1312,6 @@ class _DialogSeleccionarColaboradorState
         _colaboradoresFiltrados = widget.colaboradores.where((colab) {
           final nombreCompleto = 
               '${colab['nombre']} ${colab['apellido']}'.toLowerCase();
-          
-          // ✅ Convertir codigo a String para búsqueda
           final codigoStr = colab['codigo'].toString();
           
           return codigoStr.contains(query) || nombreCompleto.contains(query);
@@ -1826,117 +1323,33 @@ class _DialogSeleccionarColaboradorState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Row(
-        children: [
-          Icon(Icons.person_add, color: Colors.blue),
-          SizedBox(width: 8),
-          Expanded(child: Text('Seleccionar Colaborador')),
-        ],
-      ),
+      title: Text('Seleccionar Colaborador'),
       content: SizedBox(
         width: double.maxFinite,
         height: 400,
         child: Column(
           children: [
-            // Campo de búsqueda
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Buscar por código o nombre...',
+                hintText: 'Buscar...',
                 prefixIcon: Icon(Icons.search),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                        },
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                border: OutlineInputBorder(),
               ),
-              autofocus: false,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             
-            // Contador de resultados
-            if (_searchController.text.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  '${_colaboradoresFiltrados.length} resultado(s)',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ),
-            
-            // Lista de colaboradores filtrados
             Expanded(
               child: _colaboradoresFiltrados.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off,
-                            size: 64,
-                            color: Colors.grey[300],
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            'No se encontraron colaboradores',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 16,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Intenta con otro término de búsqueda',
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
+                  ? Center(child: Text('No se encontraron colaboradores'))
                   : ListView.builder(
-                      shrinkWrap: true,
                       itemCount: _colaboradoresFiltrados.length,
                       itemBuilder: (context, index) {
                         final colab = _colaboradoresFiltrados[index];
-                        final nombreCompleto = 
-                            '${colab['nombre']} ${colab['apellido']}';
-                        
-                        return Card(
-                          margin: EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.indigo,
-                              child: Text(
-                                colab['nombre'].toString()[0].toUpperCase(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            title: Text(
-                              nombreCompleto,
-                              style: TextStyle(fontWeight: FontWeight.w500),
-                            ),
-                            subtitle: Text('Código: ${colab['codigo']}'),
-                            trailing: Icon(
-                              Icons.chevron_right,
-                              color: Colors.grey,
-                            ),
-                            onTap: () => Navigator.pop(context, colab),
-                          ),
+                        return ListTile(
+                          title: Text('${colab['nombre']} ${colab['apellido']}'),
+                          subtitle: Text('Código: ${colab['codigo']}'),
+                          onTap: () => Navigator.pop(context, colab),
                         );
                       },
                     ),
@@ -1955,41 +1368,55 @@ class _DialogSeleccionarColaboradorState
 }
 
 // ============================================================================
-// DIALOG: Agregar Reproceso
+// 🔥 NUEVO DIÁLOGO: Seleccionar Materia Prima
 // ============================================================================
-class _DialogReproceso extends StatefulWidget {
-  final Function(Map<String, dynamic>) onAgregar;
 
-  const _DialogReproceso({required this.onAgregar});
+class _DialogSeleccionarMateriaPrima extends StatefulWidget {
+  final List<Map<String, dynamic>> materiasPrimas;
+
+  const _DialogSeleccionarMateriaPrima({
+    required this.materiasPrimas,
+  });
 
   @override
-  State<_DialogReproceso> createState() => _DialogReprocesoState();
+  State<_DialogSeleccionarMateriaPrima> createState() => 
+      _DialogSeleccionarMateriaPrimaState();
 }
 
-class _DialogReprocesoState extends State<_DialogReproceso> {
-  final _cantidadController = TextEditingController();
-  final _otraCausaController = TextEditingController();
+class _DialogSeleccionarMateriaPrimaState 
+    extends State<_DialogSeleccionarMateriaPrima> {
+  
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _materiasFiltradas = [];
 
-  // Causas predefinidas (deben coincidir con CAUSAS_CHOICES del backend)
-  final List<Map<String, String>> _causasDisponibles = [
-    {'id': 'temperatura_inadecuada', 'nombre': 'Temperatura Inadecuada'},
-    {'id': 'tiempo_excedido', 'nombre': 'Tiempo de Proceso Excedido'},
-    {'id': 'mezcla_incorrecta', 'nombre': 'Mezcla Incorrecta'},
-    {'id': 'contaminacion', 'nombre': 'Contaminación'},
-    {'id': 'error_operador', 'nombre': 'Error del Operador'},
-    {'id': 'falla_maquina', 'nombre': 'Falla de Máquina'},
-    {'id': 'materia_prima_defectuosa', 'nombre': 'Materia Prima Defectuosa'},
-    {'id': 'otro', 'nombre': 'Otro (especificar)'},
-  ];
-
-  // Set para almacenar múltiples causas seleccionadas
-  Set<String> _causasSeleccionadas = {};
+  @override
+  void initState() {
+    super.initState();
+    _materiasFiltradas = widget.materiasPrimas;
+    _searchController.addListener(_filtrarMaterias);
+  }
 
   @override
   void dispose() {
-    _cantidadController.dispose();
-    _otraCausaController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _filtrarMaterias() {
+    final query = _searchController.text.toLowerCase();
+    
+    setState(() {
+      if (query.isEmpty) {
+        _materiasFiltradas = widget.materiasPrimas;
+      } else {
+        _materiasFiltradas = widget.materiasPrimas.where((mp) {
+          final codigo = mp['codigo'].toString().toLowerCase();
+          final nombre = mp['nombre'].toString().toLowerCase();
+          
+          return codigo.contains(query) || nombre.contains(query);
+        }).toList();
+      }
+    });
   }
 
   @override
@@ -1997,473 +1424,52 @@ class _DialogReprocesoState extends State<_DialogReproceso> {
     return AlertDialog(
       title: Row(
         children: [
-          Icon(Icons.replay, color: Colors.orange),
+          Icon(Icons.add_box, color: Colors.green),
           SizedBox(width: 8),
-          Expanded(child: Text('Agregar Reproceso')),
+          Text('Agregar Materia Prima'),
         ],
       ),
-      content: SingleChildScrollView(
-        child: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Campo de cantidad
-              TextFormField(
-                controller: _cantidadController,
-                decoration: InputDecoration(
-                  labelText: 'Cantidad *',
-                  suffixText: 'kg',
-                  prefixIcon: Icon(Icons.scale),
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar por código o nombre...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
               ),
-              
-              const SizedBox(height: 20),
-
-              Text(
-                'Causas del Reproceso *',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              
-              Text(
-                'Selecciona una o más causas',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-              
-              const SizedBox(height: 8),
-              
-              // Lista de checkboxes
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: _causasDisponibles.map((causa) {
-                    return CheckboxListTile(
-                      title: Text(causa['nombre']!),
-                      value: _causasSeleccionadas.contains(causa['id']),
-                      onChanged: (value) {
-                        setState(() {
-                          if (value == true) {
-                            _causasSeleccionadas.add(causa['id']!);
-                          } else {
-                            _causasSeleccionadas.remove(causa['id']);
-                          }
-                        });
-                      },
-                      dense: true,
-                      controlAffinity: ListTileControlAffinity.leading,
-                    );
-                  }).toList(),
-                ),
-              ),
-              
-              // Contador de causas seleccionadas
-              if (_causasSeleccionadas.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '${_causasSeleccionadas.length} causa(s) seleccionada(s)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange.shade900,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-              
-              // Campo de texto para "Otro" (solo si selecciona "otro")
-              if (_causasSeleccionadas.contains('otro')) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.edit, size: 20, color: Colors.orange),
-                          SizedBox(width: 8),
-                          Text(
-                            'Especifica la otra causa',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.orange.shade900,
-                            ),
+            ),
+            SizedBox(height: 16),
+            
+            Expanded(
+              child: _materiasFiltradas.isEmpty
+                  ? Center(child: Text('No se encontraron materias primas'))
+                  : ListView.builder(
+                      itemCount: _materiasFiltradas.length,
+                      itemBuilder: (context, index) {
+                        final mp = _materiasFiltradas[index];
+                        return Card(
+                          child: ListTile(
+                            leading: Icon(Icons.inventory_2, color: Colors.blue),
+                            title: Text(mp['nombre']),
+                            subtitle: Text('${mp['codigo']} - ${mp['unidad_medida']}'),
+                            trailing: Icon(Icons.add_circle, color: Colors.green),
+                            onTap: () => Navigator.pop(context, mp),
                           ),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      TextFormField(
-                        controller: _otraCausaController,
-                        decoration: InputDecoration(
-                          hintText: 'Describe la causa específica...',
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 3,
-                        maxLength: 200,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text('Cancelar'),
-        ),
-        ElevatedButton.icon(
-          onPressed: () {
-            if (_cantidadController.text.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Ingresa la cantidad de reproceso'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-
-            // Validación: al menos una causa seleccionada
-            if (_causasSeleccionadas.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Selecciona al menos una causa del reproceso'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-
-            // Validación: si seleccionó "otro", debe especificar
-            if (_causasSeleccionadas.contains('otro') && 
-                _otraCausaController.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Especifica la causa de "Otro"'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-
-            // Preparar descripción: combinar todas las causas seleccionadas
-            List<String> descripciones = [];
-            
-            for (String causaId in _causasSeleccionadas) {
-              if (causaId == 'otro') {
-                // Si es "otro", usar el texto del usuario
-                descripciones.add(_otraCausaController.text.trim());
-              } else {
-                // Si es predefinida, usar el nombre
-                final causa = _causasDisponibles.firstWhere(
-                  (c) => c['id'] == causaId,
-                );
-                descripciones.add(causa['nombre']!);
-              }
-            }
-            
-            // Unir todas las causas con comas
-            String descripcionFinal = descripciones.join(', ');
-
-            widget.onAgregar({
-              'cantidad_kg': double.parse(_cantidadController.text),
-              'descripcion': descripcionFinal,
-            });
-
-            Navigator.pop(context);
-          },
-          icon: Icon(Icons.add),
-          label: Text('Agregar'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ============================================================================
-// DIALOG: Agregar Merma
-// ============================================================================
-class _DialogMerma extends StatefulWidget {
-  final Function(Map<String, dynamic>) onAgregar;
-
-  const _DialogMerma({required this.onAgregar});
-
-  @override
-  State<_DialogMerma> createState() => _DialogMermaState();
-}
-
-class _DialogMermaState extends State<_DialogMerma> {
-  final _cantidadController = TextEditingController();
-  final _otraCausaController = TextEditingController();
-
-  // Causas predefinidas (deben coincidir con CAUSAS_CHOICES del backend)
-  final List<Map<String, String>> _causasDisponibles = [
-    {'id': 'desperdicio_corte', 'nombre': 'Desperdicio en Corte'},
-    {'id': 'producto_defectuoso', 'nombre': 'Producto Defectuoso'},
-    {'id': 'derrame', 'nombre': 'Derrame o Pérdida'},
-    {'id': 'caducidad', 'nombre': 'Producto Caducado'},
-    {'id': 'error_pesaje', 'nombre': 'Error en Pesaje'},
-    {'id': 'adherencia_equipo', 'nombre': 'Adherencia a Equipo'},
-    {'id': 'rechazo_calidad', 'nombre': 'Rechazo de Calidad'},
-    {'id': 'otro', 'nombre': 'Otro (especificar)'},
-  ];
-
-  // Set para almacenar múltiples causas seleccionadas
-  Set<String> _causasSeleccionadas = {};
-
-  @override
-  void dispose() {
-    _cantidadController.dispose();
-    _otraCausaController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Row(
-        children: [
-          Icon(Icons.delete_outline, color: Colors.red),
-          SizedBox(width: 8),
-          Expanded(child: Text('Agregar Merma')),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Campo de cantidad
-              TextFormField(
-                controller: _cantidadController,
-                decoration: InputDecoration(
-                  labelText: 'Cantidad *',
-                  suffixText: 'kg',
-                  prefixIcon: Icon(Icons.scale),
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-              ),
-              
-              const SizedBox(height: 20),
-              
-              // Título de causas
-              Text(
-                'Causas de la Merma *',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              
-              Text(
-                'Selecciona una o más causas',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-              
-              const SizedBox(height: 8),
-              
-              // Lista de checkboxes
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: _causasDisponibles.map((causa) {
-                    return CheckboxListTile(
-                      title: Text(causa['nombre']!),
-                      value: _causasSeleccionadas.contains(causa['id']),
-                      onChanged: (value) {
-                        setState(() {
-                          if (value == true) {
-                            _causasSeleccionadas.add(causa['id']!);
-                          } else {
-                            _causasSeleccionadas.remove(causa['id']);
-                          }
-                        });
-                      },
-                      dense: true,
-                      controlAffinity: ListTileControlAffinity.leading,
-                    );
-                  }).toList(),
-                ),
-              ),
-              
-              // Contador de causas seleccionadas
-              if (_causasSeleccionadas.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '${_causasSeleccionadas.length} causa(s) seleccionada(s)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.red.shade900,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-              
-              // Campo de texto para "Otro" (solo si selecciona "otro")
-              if (_causasSeleccionadas.contains('otro')) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.edit, size: 20, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text(
-                            'Especifica la otra causa',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red.shade900,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      TextFormField(
-                        controller: _otraCausaController,
-                        decoration: InputDecoration(
-                          hintText: 'Describe la causa específica...',
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 3,
-                        maxLength: 200,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton.icon(
-          onPressed: () {
-            if (_cantidadController.text.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Completa todos los campos'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-
-            // Validación: al menos una causa seleccionada
-            if (_causasSeleccionadas.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Selecciona al menos una causa de la merma'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-
-            // Validación: si seleccionó "otro", debe especificar
-            if (_causasSeleccionadas.contains('otro') && 
-                _otraCausaController.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Especifica la causa de "Otro"'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-
-            // Preparar descripción: combinar todas las causas seleccionadas
-            List<String> descripciones = [];
-            
-            for (String causaId in _causasSeleccionadas) {
-              if (causaId == 'otro') {
-                // Si es "otro", usar el texto del usuario
-                descripciones.add(_otraCausaController.text.trim());
-              } else {
-                // Si es predefinida, usar el nombre
-                final causa = _causasDisponibles.firstWhere(
-                  (c) => c['id'] == causaId,
-                );
-                descripciones.add(causa['nombre']!);
-              }
-            }
-            
-            // Unir todas las causas con comas
-            String descripcionFinal = descripciones.join(', ');
-
-            // Retornar datos
-            widget.onAgregar({
-              'cantidad_kg': double.parse(_cantidadController.text),
-              'descripcion': descripcionFinal,
-            });
-
-            Navigator.pop(context);
-          },
-          icon: Icon(Icons.add),
-          label: Text('Agregar'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red,
-          ),
         ),
       ],
     );

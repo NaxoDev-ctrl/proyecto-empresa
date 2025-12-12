@@ -15,6 +15,7 @@ from .views import (
     EventoProcesoViewSet,
     TrazabilidadViewSet,
     FirmaTrazabilidadViewSet,
+    MateriaPrimaViewSet,
 )
 
 # Router para los ViewSets
@@ -30,6 +31,7 @@ router.register(r'tipos-eventos', TipoEventoViewSet, basename='tipo-evento')
 router.register(r'hojas-procesos', HojaProcesosViewSet, basename='hoja-procesos')
 router.register(r'eventos-proceso', EventoProcesoViewSet, basename='evento-proceso')
 router.register(r'trazabilidades', TrazabilidadViewSet, basename='trazabilidad')
+router.register(r'materias-primas', MateriaPrimaViewSet, basename='materiaprima')
 router.register(r'firmas-trazabilidad', FirmaTrazabilidadViewSet, basename='firma-trazabilidad')
 
 urlpatterns = [

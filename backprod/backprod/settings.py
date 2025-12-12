@@ -81,7 +81,7 @@ WSGI_APPLICATION = 'backprod.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'chocolateria_test2',
+        'NAME': 'chocolateria_test',
         'USER': 'postgres',
         'PASSWORD': 'naxo21',
         'HOST': 'localhost',

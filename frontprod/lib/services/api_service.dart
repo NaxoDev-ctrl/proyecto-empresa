@@ -866,6 +866,31 @@ class ApiService {
     }
   }
 
+  Future<List<dynamic>> getMateriasPrimas({String? search}) async {
+    try {
+      String url = '$baseUrl/materias-primas/';
+      if (search != null && search.isNotEmpty) {
+        url += '?search=$search';
+      }
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(utf8.decode(response.bodyBytes));
+        final data = jsonResponse is List ? jsonResponse : jsonResponse['results'];
+        return data;
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener materias primas');
+      }
+    } catch (e) {
+      throw Exception('Error de conexión: $e');
+    }
+  }
+
   /// Obtener detalle de trazabilidad
   Future<Map<String, dynamic>> getTrazabilidadDetalle(int id) async {
     try {
@@ -1072,5 +1097,4 @@ class ApiService {
   Future<void> logout() async {
     await _clearToken();
   }
-
 }

@@ -172,10 +172,14 @@ class MateriaPrimaSerializer(serializers.ModelSerializer):
     """
     Serializer para el modelo MateriaPrima.
     """
+    unidad_medida_display = serializers.CharField(
+        source='get_unidad_medida_display',
+        read_only=True
+    )
     
     class Meta:
         model = MateriaPrima
-        fields = ['id', 'codigo', 'nombre', 'requiere_lote', 'activo']
+        fields = ['id', 'codigo', 'nombre', 'unidad_medida', 'unidad_medida_display', 'requiere_lote', 'activo']
         read_only_fields = ['id']
 
 
@@ -664,41 +668,21 @@ class HojaProcesosDetailSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
-# SERIALIZER: TrazabilidadMateriaPrima
-# ============================================================================
-class TrazabilidadMateriaPrimaSerializer(serializers.ModelSerializer):
-    """
-    Serializer para TrazabilidadMateriaPrima.
-    """
-    
-    materia_prima_detalle = MateriaPrimaSerializer(source='materia_prima', read_only=True)
-    unidad_medida_display = serializers.CharField(source='get_unidad_medida_display', read_only=True)
-    
-    class Meta:
-        model = TrazabilidadMateriaPrima
-        fields = [
-            'id',
-            'materia_prima',
-            'materia_prima_detalle',
-            'lote',
-            'cantidad_usada',
-            'unidad_medida',
-            'unidad_medida_display'
-        ]
-        read_only_fields = ['id']
-
-
-# ============================================================================
 # SERIALIZER: Reproceso
 # ============================================================================
 class ReprocesoSerializer(serializers.ModelSerializer):
     """
     Serializer para Reproceso.
     """
+
+    causas_display = serializers.CharField(
+        source='get_causas_display',
+        read_only=True
+    )
     
     class Meta:
         model = Reproceso
-        fields = ['id', 'cantidad_kg', 'descripcion']
+        fields = ['id', 'cantidad', 'causas', 'causas_display']
         read_only_fields = ['id']
 
 
@@ -709,10 +693,44 @@ class MermaSerializer(serializers.ModelSerializer):
     """
     Serializer para Merma.
     """
+    causas_display = serializers.CharField(
+        source='get_causas_display',
+        read_only=True
+    )
     
     class Meta:
         model = Merma
-        fields = ['id', 'cantidad_kg', 'descripcion']
+        fields = ['id', 'cantidad', 'causas', 'causas_display']
+        read_only_fields = ['id']
+
+
+# ============================================================================
+# SERIALIZER: TrazabilidadMateriaPrima
+# ============================================================================
+class TrazabilidadMateriaPrimaSerializer(serializers.ModelSerializer):
+    """
+    Serializer para TrazabilidadMateriaPrima.
+    """
+    
+    materia_prima_detalle = MateriaPrimaSerializer(source='materia_prima', read_only=True)
+    unidad_medida_display = serializers.CharField(source='get_unidad_medida_display', read_only=True)
+
+    reprocesos = ReprocesoSerializer(many=True, read_only=True)
+    mermas = MermaSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = TrazabilidadMateriaPrima
+        fields = [
+            'id',
+            'materia_prima',
+            'materia_prima_detalle',
+            'lote',
+            'cantidad_usada',
+            'unidad_medida',
+            'unidad_medida_display',
+            'reprocesos',
+            'mermas'
+        ]
         read_only_fields = ['id']
 
 
@@ -1140,9 +1158,9 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
             if not isinstance(reproceso, dict):
                 raise serializers.ValidationError(f'Elemento {i} debe ser un diccionario')
             
-            if 'cantidad_kg' not in reproceso or 'descripcion' not in reproceso:
+            if 'cantidad' not in reproceso or 'causas' not in reproceso:
                 raise serializers.ValidationError(
-                    f'Elemento {i}: faltan campos (cantidad_kg, descripcion)'
+                    f'MP {i}, Reproceso {j}: faltan cantidad o causas'
                 )
         
         return parsed
@@ -1164,9 +1182,9 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
             if not isinstance(merma, dict):
                 raise serializers.ValidationError(f'Elemento {i} debe ser un diccionario')
             
-            if 'cantidad_kg' not in merma or 'descripcion' not in merma:
+            if 'cantidad' not in merma or 'causas' not in merma:
                 raise serializers.ValidationError(
-                    f'Elemento {i}: faltan campos (cantidad_kg, descripcion)'
+                    f'MP {i}, Merma {j}: faltan cantidad o causas'
                 )
         
         return parsed
@@ -1302,9 +1320,9 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         for i, reproceso_data in enumerate(reprocesos_data):
             try:
                 Reproceso.objects.create(
-                    trazabilidad=trazabilidad,
-                    cantidad_kg=float(reproceso_data['cantidad_kg']),
-                    descripcion=reproceso_data['descripcion']
+                    trazabilidad_materia_prima=TrazabilidadMateriaPrima,
+                    cantidad=float(reproceso_data['cantidad']),
+                    causas=reproceso_data['causas']
                 )
                 print(f'  ✅ Reproceso {i+1}')
             except Exception as e:
@@ -1314,9 +1332,9 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         for i, merma_data in enumerate(mermas_data):
             try:
                 Merma.objects.create(
-                    trazabilidad=trazabilidad,
-                    cantidad_kg=float(merma_data['cantidad_kg']),
-                    descripcion=merma_data['descripcion']
+                    trazabilidad_materia_prima=TrazabilidadMateriaPrima,
+                    cantidad=float(merma_data['cantidad']),
+                    causas=merma_data['causas']
                 )
                 print(f'  ✅ Merma {i+1}')
             except Exception as e:

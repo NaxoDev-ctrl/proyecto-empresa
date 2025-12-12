@@ -1326,3 +1326,103 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+class MateriaPrimaViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestión de Materias Primas
+    
+    list: Listar todas las materias primas activas
+    retrieve: Obtener detalle de una materia prima por código
+    create: Crear nueva materia prima (solo supervisores)
+    update: Actualizar materia prima (solo supervisores)
+    destroy: Eliminar materia prima (solo supervisores)
+    """
+    
+    queryset = MateriaPrima.objects.filter(activo=True).order_by('nombre')
+    serializer_class = MateriaPrimaSerializer
+    lookup_field = 'codigo'  # Usar código en vez de id
+    
+    def get_permissions(self):
+        """
+        - GET (list, retrieve): Acceso sin autenticación (operadores)
+        - POST, PUT, PATCH, DELETE: Solo autenticados (supervisores)
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAnyAccess]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
+    def get_queryset(self):
+        """
+        Filtrar materias primas con búsqueda opcional
+        """
+        queryset = self.queryset
+        
+        # Búsqueda por nombre o código
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(nombre__icontains=search) | 
+                Q(codigo__icontains=search)
+            )
+        
+        return queryset
+    
+    def list(self, request, *args, **kwargs):
+        """
+        GET /api/materias-primas/
+        
+        Retorna lista de todas las materias primas activas
+        
+        Query params opcionales:
+        - search: buscar por nombre o código
+        
+        Ejemplo: /api/materias-primas/?search=manjar
+        """
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """
+        GET /api/materias-primas/{codigo}/
+        
+        Retorna detalle de una materia prima específica
+        
+        Ejemplo: /api/materias-primas/LAC0001/
+        """
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+
+# ============================================================================
+# AGREGAR ESTO A: produccion/serializers.py
+# ============================================================================
+
+from rest_framework import serializers
+from .models import MateriaPrima
+
+
+class MateriaPrimaSerializer(serializers.ModelSerializer):
+    """
+    Serializer para Materia Prima
+    Retorna los campos necesarios para el frontend
+    """
+    
+    class Meta:
+        model = MateriaPrima
+        fields = [
+            'codigo',
+            'nombre',
+            'unidad_medida',
+            'requiere_lote',
+            'activo',
+        ]
+        read_only_fields = ['codigo']  # El código no se puede cambiar
+    
+    def validate_codigo(self, value):
+        """Validar que el código sea único"""
+        if MateriaPrima.objects.filter(codigo=value).exists():
+            raise serializers.ValidationError("Ya existe una materia prima con este código")
+        return value.upper()  # Convertir a mayúsculas

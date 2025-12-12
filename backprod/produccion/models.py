@@ -243,6 +243,11 @@ class MateriaPrima(models.Model):
     """
     Representa las materias primas asociadas a cada producto (receta).
     """
+
+    UNIDADES_MEDIDA = [
+        ('kg', 'Kilogramos'),
+        ('unidades', 'Unidades'),
+    ]
     
     codigo = models.CharField(
         max_length=20,
@@ -253,6 +258,13 @@ class MateriaPrima(models.Model):
     nombre = models.CharField(
         max_length=200,
         help_text="Nombre de la materia prima. Ejemplo: manjar"
+    )
+
+    unidad_medida = models.CharField(
+        max_length=20,
+        choices=UNIDADES_MEDIDA,
+        default='kg',
+        help_text='Unidad de medida por defecto de esta materia prima'
     )
     
     requiere_lote = models.BooleanField(
@@ -948,7 +960,7 @@ class TrazabilidadMateriaPrima(models.Model):
     unidad_medida = models.CharField(
         max_length=20,
         choices=UNIDADES_MEDIDA,
-        default='kg',
+        blank=True,
         help_text="Unidad de medida de la cantidad"
     )
     
@@ -961,6 +973,20 @@ class TrazabilidadMateriaPrima(models.Model):
     
     def __str__(self):
         return f"{self.materia_prima.nombre} - {self.cantidad_usada} {self.get_unidad_medida_display()}"
+    
+    def get_unidad_display(self, udm):
+        """Helper para mostrar unidad correcta"""
+        return dict(self.UNIDADES_MEDIDA).get(udm, udm)
+    
+    def save(self, *args, **kwargs):
+        """
+        Al guardar, si no se especificó unidad_medida, 
+        tomar la unidad_medida de la materia prima
+        """
+        if not self.unidad_medida:
+            self.unidad_medida = self.materia_prima.unidad_medida
+        
+        super().save(*args, **kwargs)
     
     def clean(self):
         """Validaciones personalizadas"""
@@ -977,9 +1003,6 @@ class TrazabilidadMateriaPrima(models.Model):
 # MODELO: Reproceso
 # ============================================================================
 class Reproceso(models.Model):
-    """
-    Registra los reprocesos ocurridos durante la producción.
-    """
     CAUSAS_CHOICES = [
         ('temperatura_inadecuada', 'Temperatura Inadecuada'),
         ('tiempo_excedido', 'Tiempo de Proceso Excedido'),
@@ -991,26 +1014,23 @@ class Reproceso(models.Model):
         ('otro', 'Otro (especificar)'),
     ]
     
-    trazabilidad = models.ForeignKey(
-        Trazabilidad,
+    trazabilidad_materia_prima = models.ForeignKey(
+        'TrazabilidadMateriaPrima', 
         on_delete=models.CASCADE,
         related_name='reprocesos',
-        help_text="Trazabilidad a la que pertenece"
+        help_text="Materia prima específica que tuvo reproceso"
     )
     
-    cantidad_kg = models.DecimalField(
+    cantidad = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text="Cantidad de reproceso en kilogramos"
+        help_text="Cantidad de de reproceso"
     )
 
-    causas = models.CharField(max_length=500, choices=CAUSAS_CHOICES, null=True)
-    observaciones = models.TextField(blank=True, null=True)
-    
-    descripcion = models.TextField(
-        max_length=500,
-        help_text="Descripción del reproceso"
-    )
+    causas = models.CharField(
+        max_length=200, 
+        choices=CAUSAS_CHOICES, 
+        null=True)
     
     class Meta:
         db_table = 'reprocesos'
@@ -1019,7 +1039,10 @@ class Reproceso(models.Model):
         ordering = ['id']
     
     def __str__(self):
-        return f"Reproceso - {self.cantidad_kg} kg"
+        mp_nombre = self.trazabilidad_materia_prima.materia_prima.nombre
+        udm = self.trazabilidad_materia_prima.unidad_medida
+        causa_display = self.get_causas_display()
+        return f"Reproceso - {mp_nombre}: {self.cantidad} {udm} - {causa_display}"
 
 
 # ============================================================================
@@ -1040,26 +1063,23 @@ class Merma(models.Model):
         ('otro', 'Otro (especificar)'),
     ]
     
-    trazabilidad = models.ForeignKey(
-        Trazabilidad,
+    trazabilidad_materia_prima = models.ForeignKey(
+        'TrazabilidadMateriaPrima',
         on_delete=models.CASCADE,
         related_name='mermas',
-        help_text="Trazabilidad a la que pertenece"
+        help_text="Materia prima específica que tuvo merma"
     )
     
-    cantidad_kg = models.DecimalField(
+    cantidad = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text="Cantidad de merma en kilogramos"
+        help_text="Cantidad de merma"
     )
     
-    descripcion = models.TextField(
-        max_length=500,
-        help_text="Descripción de la merma"
-    )
-
-    causas = models.CharField(max_length=500, choices=CAUSAS_CHOICES, null=True)
-    observaciones = models.TextField(blank=True, null=True)
+    causas = models.CharField(
+        max_length=200, 
+        choices=CAUSAS_CHOICES, 
+        null=True)
     
     class Meta:
         db_table = 'mermas'
@@ -1068,7 +1088,10 @@ class Merma(models.Model):
         ordering = ['id']
     
     def __str__(self):
-        return f"Merma - {self.cantidad_kg} kg"
+        mp_nombre = self.trazabilidad_materia_prima.materia_prima.nombre
+        udm = self.trazabilidad_materia_prima.unidad_medida
+        causa_display = self.get_causas_display()
+        return f"Merma - {mp_nombre}: {self.cantidad} {udm} - {causa_display}"
 
     # ============================================================================
 # MODELO: FotoEtiqueta

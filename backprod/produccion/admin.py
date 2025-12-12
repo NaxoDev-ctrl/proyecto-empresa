@@ -147,14 +147,14 @@ class MateriaPrimaAdmin(admin.ModelAdmin):
     Configuración del admin para Materias Primas.
     """
     
-    list_display = ['codigo', 'nombre', 'requiere_lote', 'activo']
-    list_filter = ['requiere_lote', 'activo']
+    list_display = ['codigo', 'nombre', 'unidad_medida', 'requiere_lote', 'activo']
+    list_filter = ['requiere_lote', 'activo', 'unidad_medida']
     search_fields = ['codigo', 'nombre']
     ordering = ['codigo']
     
     fieldsets = (
         ('Información de Materia Prima', {
-            'fields': ('codigo', 'nombre', 'requiere_lote', 'activo')
+            'fields': ('codigo', 'nombre', 'unidad_medida', 'requiere_lote', 'activo')
         }),
     )
 
@@ -476,7 +476,10 @@ class ReprocesoInline(admin.TabularInline):
     """
     model = Reproceso
     extra = 0
-    fields = ['cantidad_kg', 'descripcion']
+    fields = ['cantidad', 'causas']
+
+    verbose_name = 'Reproceso de esta materia prima'
+    verbose_name_plural = 'Reprocesos'
 
 
 # ============================================================================
@@ -488,7 +491,10 @@ class MermaInline(admin.TabularInline):
     """
     model = Merma
     extra = 0
-    fields = ['cantidad_kg', 'descripcion']
+    fields = ['cantidad', 'causas']
+
+    verbose_name = 'Merma de esta materia prima'
+    verbose_name_plural = 'Mermas'
 
 
 # ============================================================================
@@ -536,7 +542,8 @@ class TrazabilidadAdmin(admin.ModelAdmin):
     
     list_display = [
         'id',
-        'hoja_procesos', 
+        'hoja_procesos',
+        'lote',
         'cantidad_producida', 
         'get_colaboradores_reales',
         'estado_badge', 
@@ -546,6 +553,7 @@ class TrazabilidadAdmin(admin.ModelAdmin):
     ]
     list_filter = ['estado', 'fecha_creacion']
     search_fields = [
+        'lote',
         'hoja_procesos__tarea__producto__nombre',
         'hoja_procesos__tarea__linea__nombre'
     ]
@@ -553,13 +561,13 @@ class TrazabilidadAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Información de la Trazabilidad', {
-            'fields': ('hoja_procesos', 'cantidad_producida', 'estado')
+            'fields': ('hoja_procesos', 'cantidad_producida', 'lote', 'juliano', 'estado')
         }),
         ('Retención', {
             'fields': ('motivo_retencion',),
             'classes': ('collapse',)
         }),
-        ('Foto de Etiquetas', {  # ← NUEVA SECCIÓN
+        ('Foto de Etiquetas', {
             'fields': ('foto_etiquetas', 'preview_foto_etiquetas')
         }),
         ('Observaciones', {
@@ -568,12 +576,10 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         }),
     )
     
-    readonly_fields = ['fecha_creacion', 'preview_foto_etiquetas']
+    readonly_fields = ['fecha_creacion', 'preview_foto_etiquetas', 'juliano', 'lote']
     inlines = [
         TrazabilidadMateriaPrimaInline,
         TrazabilidadColaboradorInline,
-        ReprocesoInline,
-        MermaInline,
         FirmaTrazabilidadInline
     ]
     
@@ -583,9 +589,8 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         count = obj.colaboradores_reales.count()
         
         if count == 0:
-            return "⚠️ Ninguno"
+            return "Ninguno"
         
-        # Obtener primeros 3 colaboradores
         colaboradores = obj.colaboradores_reales.select_related('colaborador')[:3]
         nombres = [str(tc.colaborador.codigo) for tc in colaboradores]
         result = ", ".join(nombres)
@@ -595,14 +600,14 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         
         return f"✓ {count} → {result}"
     
-    get_colaboradores_reales.short_description = '👥 Colaboradores'
+    get_colaboradores_reales.short_description = 'Colaboradores'
 
     def estado_badge(self, obj):
         """Muestra el estado con color"""
         colors = {
-            'en_revision': '#ffc107',  # amarillo
-            'liberado': '#28a745',     # verde
-            'retenido': '#dc3545'      # rojo
+            'en_revision': '#ffc107',
+            'liberado': '#28a745',
+            'retenido': '#dc3545'
         }
         color = colors.get(obj.estado, '#6c757d')
         return format_html(
@@ -625,7 +630,7 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         if tiene_control_calidad:
             icons.append('✓ Control Calidad')
         
-        return ', '.join(icons) if icons else '❌ Sin firmas'
+        return ', '.join(icons) if icons else 'Sin firmas'
     
     tiene_firmas.short_description = 'Firmas'
 
@@ -641,7 +646,7 @@ class TrazabilidadAdmin(admin.ModelAdmin):
         if obj.foto_etiquetas:
             return format_html('<span style="color: green;">✓ Sí</span>')
         return format_html('<span style="color: red;">✗ No</span>')
-    tiene_foto_etiquetas.short_description = '📷 Foto'
+    tiene_foto_etiquetas.short_description = 'Foto'
     
     def preview_foto_etiquetas(self, obj):
         """Muestra preview de la foto en el admin"""
@@ -674,3 +679,161 @@ class FirmaTrazabilidadAdmin(admin.ModelAdmin):
     ordering = ['-fecha_firma']
     
     readonly_fields = ['fecha_firma']
+
+
+# ============================================================================
+# ADMIN: TrazabilidadMateriaPrima
+# ============================================================================
+@admin.register(TrazabilidadMateriaPrima)
+class TrazabilidadMateriaPrimaAdmin(admin.ModelAdmin):
+    list_display = [
+        'trazabilidad',
+        'materia_prima',
+        'lote',
+        'cantidad_usada',
+        'unidad_medida',
+        'count_reprocesos',
+        'count_mermas'
+    ]
+    
+    list_filter = [
+        'materia_prima',
+        'unidad_medida',
+        'trazabilidad__estado'
+    ]
+    
+    search_fields = [
+        'trazabilidad__lote',
+        'materia_prima__nombre',
+        'lote'
+    ]
+    
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('trazabilidad', 'materia_prima', 'lote')
+        }),
+        ('Cantidades', {
+            'fields': ('cantidad_usada', 'unidad_medida')
+        }),
+    )
+    
+    inlines = [ReprocesoInline, MermaInline]
+    
+    def count_reprocesos(self, obj):
+        """Muestra cantidad de reprocesos"""
+        count = obj.reprocesos.count()
+        if count == 0:
+            return '—'
+        return f'♻️ {count}'
+    count_reprocesos.short_description = 'Reprocesos'
+    
+    def count_mermas(self, obj):
+        """Muestra cantidad de mermas"""
+        count = obj.mermas.count()
+        if count == 0:
+            return '—'
+        return f'🗑️ {count}'
+    count_mermas.short_description = 'Mermas'
+
+# ============================================================================
+# ADMIN: Reproceso
+# ============================================================================
+@admin.register(Reproceso)
+class ReprocesoAdmin(admin.ModelAdmin):
+    list_display = [
+        'get_trazabilidad',
+        'get_materia_prima',
+        'cantidad',
+        'get_unidad',
+        'causas',
+        'causas_display',
+    ]
+    
+    list_filter = ['causas', 'trazabilidad_materia_prima__materia_prima']
+    
+    search_fields = [
+        'trazabilidad_materia_prima__trazabilidad__lote',
+        'trazabilidad_materia_prima__materia_prima__nombre'
+    ]
+    
+    fieldsets = (
+        ('Información del Reproceso', {
+            'fields': ('trazabilidad_materia_prima', 'cantidad', 'causas')
+        }),
+    )
+    
+    def get_trazabilidad(self, obj):
+        """Muestra el lote de la trazabilidad"""
+        return obj.trazabilidad_materia_prima.trazabilidad.lote
+    get_trazabilidad.short_description = 'Lote'
+    get_trazabilidad.admin_order_field = 'trazabilidad_materia_prima__trazabilidad__lote'
+    
+    def get_materia_prima(self, obj):
+        """Muestra la materia prima"""
+        return obj.trazabilidad_materia_prima.materia_prima.nombre
+    get_materia_prima.short_description = 'Materia Prima'
+    get_materia_prima.admin_order_field = 'trazabilidad_materia_prima__materia_prima__nombre'
+    
+    def get_unidad(self, obj):
+        """Muestra la unidad de medida"""
+        return obj.trazabilidad_materia_prima.get_unidad_display(
+            obj.trazabilidad_materia_prima.unidad_medida
+        )
+    get_unidad.short_description = 'UdM'
+
+    def causas_display(self, obj):
+        """Muestra la causa en formato legible"""
+        return obj.get_causas_display()
+    causas_display.short_description = 'Causa'
+
+
+# ============================================================================
+# ADMIN: Merma (VISTA INDEPENDIENTE - MODIFICADO)
+# ============================================================================
+@admin.register(Merma)
+class MermaAdmin(admin.ModelAdmin):
+    list_display = [
+        'get_trazabilidad',
+        'get_materia_prima',
+        'cantidad',
+        'get_unidad',
+        'causas',
+        'causas_display'
+    ]
+    
+    list_filter = ['causas', 'trazabilidad_materia_prima__materia_prima']
+    
+    search_fields = [
+        'trazabilidad_materia_prima__trazabilidad__lote',
+        'trazabilidad_materia_prima__materia_prima__nombre'
+    ]
+    
+    fieldsets = (
+        ('Información de la Merma', {
+            'fields': ('trazabilidad_materia_prima', 'cantidad', 'causas')
+        }),
+    )
+    
+    def get_trazabilidad(self, obj):
+        """Muestra el lote de la trazabilidad"""
+        return obj.trazabilidad_materia_prima.trazabilidad.lote
+    get_trazabilidad.short_description = 'Lote'
+    get_trazabilidad.admin_order_field = 'trazabilidad_materia_prima__trazabilidad__lote'
+    
+    def get_materia_prima(self, obj):
+        """Muestra la materia prima"""
+        return obj.trazabilidad_materia_prima.materia_prima.nombre
+    get_materia_prima.short_description = 'Materia Prima'
+    get_materia_prima.admin_order_field = 'trazabilidad_materia_prima__materia_prima__nombre'
+    
+    def get_unidad(self, obj):
+        """Muestra la unidad de medida"""
+        return obj.trazabilidad_materia_prima.get_unidad_display(
+            obj.trazabilidad_materia_prima.unidad_medida
+        )
+    get_unidad.short_description = 'UdM'
+    
+    def causas_display(self, obj):
+        """Muestra la causa en formato legible"""
+        return obj.get_causas_display()
+    causas_display.short_description = 'Causa'

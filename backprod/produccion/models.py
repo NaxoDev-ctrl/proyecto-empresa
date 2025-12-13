@@ -245,8 +245,8 @@ class MateriaPrima(models.Model):
     """
 
     UNIDADES_MEDIDA = [
-        ('kg', 'Kilogramos'),
-        ('unidades', 'Unidades'),
+        ('KG', 'KG'),
+        ('UN', 'UN'),
     ]
     
     codigo = models.CharField(
@@ -263,7 +263,7 @@ class MateriaPrima(models.Model):
     unidad_medida = models.CharField(
         max_length=20,
         choices=UNIDADES_MEDIDA,
-        default='kg',
+        default='KG',
         help_text='Unidad de medida por defecto de esta materia prima'
     )
     
@@ -879,7 +879,7 @@ class Trazabilidad(models.Model):
             int: Día juliano (1-366)
             
         Ejemplo:
-            >>> Trazabilidad.calcular_juliano(datetime(2025, 12, 8))
+            >>> Trazabilidad.calcular_juliano(datetime(8, 12, 2025))
             342
         """
         return fecha.timetuple().tm_yday
@@ -1004,13 +1004,11 @@ class TrazabilidadMateriaPrima(models.Model):
 # ============================================================================
 class Reproceso(models.Model):
     CAUSAS_CHOICES = [
-        ('temperatura_inadecuada', 'Temperatura Inadecuada'),
-        ('tiempo_excedido', 'Tiempo de Proceso Excedido'),
-        ('mezcla_incorrecta', 'Mezcla Incorrecta'),
-        ('contaminacion', 'Contaminación'),
-        ('error_operador', 'Error del Operador'),
-        ('falla_maquina', 'Falla de Máquina'),
-        ('materia_prima_defectuosa', 'Materia Prima Defectuosa'),
+        ('escasez_de_banado', 'Escasez de Bañado'),
+        ('poca_vida_util', 'Poca Vida Útil'),
+        ('deformacion', 'Deformación'),
+        ('peso_erroneo', 'Peso Erróneo'),
+        ('mal_templado', 'Mal Templado'),
         ('otro', 'Otro (especificar)'),
     ]
     
@@ -1053,13 +1051,11 @@ class Merma(models.Model):
     Registra las mermas ocurridas durante la producción.
     """
     CAUSAS_CHOICES = [
-        ('desperdicio_corte', 'Desperdicio en Corte'),
-        ('producto_defectuoso', 'Producto Defectuoso'),
-        ('derrame', 'Derrame o Pérdida'),
-        ('caducidad', 'Producto Caducado'),
-        ('error_pesaje', 'Error en Pesaje'),
-        ('adherencia_equipo', 'Adherencia a Equipo'),
-        ('rechazo_calidad', 'Rechazo de Calidad'),
+        ('cayo_al_suelo', 'Cayó al Suelo'),
+        ('por_hongos', 'Por Hongos'),
+        ('caducidad', 'Caducidad'),
+        ('grasa_maquina', 'Grasa Máquina'),
+        ('exposicion', 'Exposición'),
         ('otro', 'Otro (especificar)'),
     ]
     

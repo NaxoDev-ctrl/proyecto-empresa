@@ -27,8 +27,14 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   final _observacionesController = TextEditingController();
   final _codigoColaboradorLoteController = TextEditingController();
   
+  // Valores calculados en tiempo real
+  String _loteGenerado = '(Ingresa código del colaborador)';
+  String _julianoGenerado = '---';
+  
   // Datos de la tarea
   Map<String, dynamic>? _tarea;
+  Map<String, Map<String, dynamic>?> _reprocesosData = {}; 
+  Map<String, Map<String, dynamic>?> _mermasData = {}; 
   
   // ========================================================================
   // LISTAS DE TODAS LAS MATERIAS PRIMAS Y COLABORADORES DISPONIBLES
@@ -64,6 +70,9 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   void initState() {
     super.initState();
     _cargarDatos();
+    
+    // Listener para regenerar lote cuando cambie el código del colaborador
+    _codigoColaboradorLoteController.addListener(_generarLote);
   }
 
   @override
@@ -146,15 +155,30 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         
         for (var mp in materiasPrimasReceta) {
           final codigo = mp['codigo'].toString();
+          final mpCompleta = _todasMateriasPrimasDisponibles.firstWhere(
+            (mpCatalogo) => mpCatalogo['codigo'] == codigo,
+            orElse: () => {
+              'codigo': codigo,
+              'nombre': mp['nombre'],
+              'unidad_medida': mp['unidad_medida'] ?? 'kg',
+              'requiere_lote': mp['requiere_lote'] ?? false,
+            },
+          );
+
           _agregarMateriaPrimaInterna(
             codigo: codigo,
-            nombre: mp['nombre'],
-            unidadMedida: mp['unidad_medida'] ?? 'kg',
-            requiereLote: mp['requiere_lote'],
+            nombre: mpCompleta['nombre'],
+            unidadMedida: mpCompleta['unidad_medida'],
+            requiereLote: mpCompleta['requiere_lote'],
           );
         }
         
         _isLoading = false;
+        
+        // ========================================================================
+        // CALCULAR JULIANO DESPUÉS DE CARGAR LA TAREA
+        // ========================================================================
+        _calcularJuliano();
       });
     } catch (e) {
       setState(() {
@@ -186,6 +210,8 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     _reprocesoControllers[codigo] = TextEditingController(text: '0');
     _mermaControllers[codigo] = TextEditingController(text: '0');
     
+    _reprocesosData[codigo] = null;
+    _mermasData[codigo] = null; 
     // Guardar datos
     _datosMateriasPrimas[codigo] = {
       'materia_prima_id': codigo,
@@ -282,6 +308,9 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                 _consumoControllers.remove(codigo);
                 _reprocesoControllers.remove(codigo);
                 _mermaControllers.remove(codigo);
+
+                _reprocesosData.remove(codigo);
+                _mermasData.remove(codigo);
               });
               
               Navigator.pop(context);
@@ -299,6 +328,62 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _ingresarReproceso(String codigoMP, String nombreMP) async {
+    final reprocesoActual = _reprocesosData[codigoMP];
+    final mp = _datosMateriasPrimas[codigoMP]!;
+    
+    final resultado = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _DialogIngresarReproceso(
+        nombreMateriaPrima: nombreMP,
+        unidadMedida: mp['unidad_medida'],
+        cantidadInicial: reprocesoActual?['cantidad']?.toString(),
+        causaInicial: reprocesoActual?['causas'],
+      ),
+    );
+    
+    if (resultado != null) {
+      setState(() {
+        if (resultado['cantidad'] == 0.0) {
+          // Si la cantidad es 0, eliminar el reproceso
+          _reprocesosData[codigoMP] = null;
+          _reprocesoControllers[codigoMP]!.text = '0';
+        } else {
+          _reprocesosData[codigoMP] = resultado;
+          _reprocesoControllers[codigoMP]!.text = resultado['cantidad'].toString();
+        }
+      });
+    }
+  }
+
+  Future<void> _ingresarMerma(String codigoMP, String nombreMP) async {
+    final mermaActual = _mermasData[codigoMP];
+    final mp = _datosMateriasPrimas[codigoMP]!;
+    
+    final resultado = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _DialogIngresarMerma(
+        nombreMateriaPrima: nombreMP,
+        unidadMedida: mp['unidad_medida'],
+        cantidadInicial: mermaActual?['cantidad']?.toString(),
+        causaInicial: mermaActual?['causas'],
+      ),
+    );
+    
+    if (resultado != null) {
+      setState(() {
+        if (resultado['cantidad'] == 0.0) {
+          // Si la cantidad es 0, eliminar la merma
+          _mermasData[codigoMP] = null;
+          _mermaControllers[codigoMP]!.text = '0';
+        } else {
+          _mermasData[codigoMP] = resultado;
+          _mermaControllers[codigoMP]!.text = resultado['cantidad'].toString();
+        }
+      });
+    }
   }
 
   // ========================================================================
@@ -332,6 +417,18 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   }
   
   Future<void> _agregarColaborador() async {
+    // Validar límite máximo
+    if (_colaboradoresSeleccionados.length >= 20) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pueden agregar más de 20 colaboradores'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
     final colaboradoresDisponibles = _todosColaboradores.where((colab) {
       return !_colaboradoresSeleccionados.any(
         (sel) => sel['codigo'] == colab['codigo']
@@ -359,6 +456,17 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
       setState(() {
         _colaboradoresSeleccionados.add(colaboradorSeleccionado);
       });
+      
+      // Mostrar contador actualizado
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${colaboradorSeleccionado['nombre']} agregado (${_colaboradoresSeleccionados.length}/20)',
+          ),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
+        ),
+      );
     }
   }
 
@@ -481,6 +589,28 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         'cantidad_usada': double.parse(consumo),
         'unidad_medida': mp['unidad_medida'],
       };
+
+      final reprocesoData = _reprocesosData[codigo];
+      if (reprocesoData != null && reprocesoData['cantidad'] > 0) {
+        mpData['reprocesos'] = [
+          {
+            'cantidad': reprocesoData['cantidad'],
+            'causas': reprocesoData['causas'],
+          }
+        ];
+      }
+
+      final mermaData = _mermasData[codigo];
+      if (mermaData != null && mermaData['cantidad'] > 0) {
+        mpData['mermas'] = [
+          {
+            'cantidad': mermaData['cantidad'],
+            'causas': mermaData['causas'],
+          }
+        ];
+      }
+
+      materiasPrimasData.add(mpData);
 
       // Agregar reprocesos si tiene
       final reprocesoText = _reprocesoControllers[codigo]!.text.trim();
@@ -615,6 +745,83 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   }
 
   // ========================================================================
+  // CÁLCULOS EN TIEMPO REAL: JULIANO Y LOTE
+  // ========================================================================
+  
+  /// Calcular día juliano (1-366) basado en la fecha de la tarea
+  void _calcularJuliano() {
+    if (_tarea == null) {
+      print('❌ _calcularJuliano: _tarea es null');
+      return;
+    }
+    
+    try {
+      final fechaStr = _tarea!['fecha'];
+      print('📅 Fecha de la tarea: $fechaStr');
+      
+      final fechaTarea = DateTime.parse(fechaStr);
+      print('📅 Fecha parseada: $fechaTarea');
+      
+      final primerDiaAnio = DateTime(fechaTarea.year, 1, 1);
+      final diferencia = fechaTarea.difference(primerDiaAnio).inDays + 1;
+      
+      print('✅ Juliano calculado: $diferencia');
+      
+      setState(() {
+        _julianoGenerado = diferencia.toString().padLeft(3, '0');
+      });
+      
+      print('✅ Juliano generado: $_julianoGenerado');
+    } catch (e) {
+      print('❌ Error al calcular juliano: $e');
+      setState(() {
+        _julianoGenerado = '---';
+      });
+    }
+  }
+  
+  /// Generar lote en tiempo real: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_OPERADOR
+  void _generarLote() {
+    final codigoColab = _codigoColaboradorLoteController.text.trim();
+    
+    print('🔄 _generarLote llamado');
+    print('   - Código colaborador: "$codigoColab"');
+    print('   - _tarea es null: ${_tarea == null}');
+    print('   - Juliano actual: $_julianoGenerado');
+    
+    if (_tarea == null || codigoColab.isEmpty) {
+      setState(() {
+        _loteGenerado = '(Ingresa código del colaborador)';
+      });
+      print('⚠️  Lote no generado: falta tarea o código');
+      return;
+    }
+    
+    try {
+      // Obtener código del producto
+      final codigoProducto = _tarea!['producto_detalle']['codigo'] ?? 'XXX';
+      
+      print('   - Código Producto: $codigoProducto');
+      print('   - Juliano: $_julianoGenerado');
+      print('   - Código Operador: $codigoColab');
+      
+      // Formato: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_OPERADOR
+      final loteCompleto = '$codigoProducto-$_julianoGenerado-$codigoColab';
+      
+      setState(() {
+        _loteGenerado = loteCompleto;
+      });
+      
+      print('✅ Lote generado: $_loteGenerado');
+    } catch (e) {
+      print('❌ Error al generar lote: $e');
+      setState(() {
+        _loteGenerado = '(Error al generar)';
+      });
+    }
+  }
+
+  // ========================================================================
   // BUILD UI
   // ========================================================================
 
@@ -655,8 +862,15 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Registro Trazabilidad'),
-        backgroundColor: Colors.indigo,
+        title: 
+        Text('Registro Trazabilidad', 
+          style: 
+          TextStyle(
+            fontWeight: FontWeight.bold, 
+            color: Color.fromRGBO(255, 217, 198, 1)
+            ),
+        ),
+        backgroundColor: Color.fromARGB(255, 137, 29, 67),
       ),
       body: Form(
         key: _formKey,
@@ -667,11 +881,9 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             SizedBox(height: 24),
             _buildTablaColaboradores(),
             SizedBox(height: 24),
-            _buildTablaMateriales(), // 🔥 ACTUALIZADA
+            _buildTablaMateriales(),
             SizedBox(height: 24),
             _buildSeccionFoto(),
-            SizedBox(height: 24),
-            _buildCodigoLote(),
             SizedBox(height: 24),
             _buildObservaciones(),
             SizedBox(height: 32),
@@ -716,17 +928,6 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Text(
-                'REGISTRO TRAZABILIDAD',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            Divider(height: 24),
-            
             Row(
               children: [
                 Expanded(
@@ -743,7 +944,8 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('JULIANO:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text('Auto'),
+                      Text(
+                        _tarea!['juliano_fecha_tarea']?.toString() ?? 'N/A'),
                     ],
                   ),
                 ),
@@ -761,8 +963,127 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             
             SizedBox(height: 16),
             
-            Text('LOTE:', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('(Se generará al guardar)'),
+            // ========================================================================
+            // LOTE Y CÓDIGO DEL COLABORADOR JUNTOS
+            // ========================================================================
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade300, width: 2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.qr_code_2, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text(
+                        'LOTE GENERADO',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  
+                  // Mostrar lote generado
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _loteGenerado.contains('(') 
+                          ? Colors.grey.shade200 
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _loteGenerado.contains('(') 
+                            ? Colors.grey 
+                            : Colors.blue,
+                        width: 2,
+                      ),
+                    ),
+                    child: Text(
+                      _loteGenerado,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: _loteGenerado.contains('(') 
+                            ? Colors.grey.shade600 
+                            : Colors.blue.shade900,
+                        letterSpacing: 1.5,
+                        fontFamily: 'monospace',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  
+                  SizedBox(height: 12),
+                  
+                  // Campo para código del colaborador
+                  Row(
+                    children: [
+                      Icon(Icons.badge, size: 20, color: Colors.blue.shade700),
+                      SizedBox(width: 8),
+                      Text(
+                        'Código del Colaborador *',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  TextFormField(
+                    controller: _codigoColaboradorLoteController,
+                    decoration: InputDecoration(
+                      hintText: 'Ej: 96',
+                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: Colors.white,
+                      isDense: true,
+                      prefixIcon: Icon(Icons.person, color: Colors.blue),
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
+                    ],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Requerido para generar el lote';
+                      }
+                      return null;
+                    },
+                  ),
+                  
+                  if (_loteGenerado.contains('('))
+                    Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info, size: 14, color: Colors.orange),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Ingresa el código para generar el lote',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
             
             Divider(height: 24),
             
@@ -860,77 +1181,181 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'COLABORADORES',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Text(
+                      'COLABORADORES',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(width: 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _colaboradoresSeleccionados.length >= 20 
+                            ? Colors.red.shade100 
+                            : Colors.blue.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_colaboradoresSeleccionados.length}/20',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: _colaboradoresSeleccionados.length >= 20 
+                              ? Colors.red.shade900 
+                              : Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 IconButton(
                   icon: Icon(Icons.person_add, color: Colors.blue),
-                  onPressed: _agregarColaborador,
-                  tooltip: 'Agregar',
+                  onPressed: _colaboradoresSeleccionados.length >= 20 
+                      ? null 
+                      : _agregarColaborador,
+                  tooltip: _colaboradoresSeleccionados.length >= 20 
+                      ? 'Límite alcanzado (20 máx.)' 
+                      : 'Agregar',
                 ),
               ],
             ),
             Divider(),
             
-            Table(
-              border: TableBorder.all(color: Colors.black, width: 1),
-              columnWidths: {
-                0: FlexColumnWidth(1),
-                1: FlexColumnWidth(2),
-              },
-              children: [
-                TableRow(
-                  decoration: BoxDecoration(color: Colors.grey.shade200),
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Text('CÓDIGO', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Text('NOMBRE', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ],
+            if (_colaboradoresSeleccionados.isEmpty)
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(Icons.people_outline, size: 48, color: Colors.grey),
+                      SizedBox(height: 12),
+                      Text(
+                        'No hay colaboradores asignados',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: _agregarColaborador,
+                        icon: Icon(Icons.add),
+                        label: Text('Agregar Colaborador'),
+                      ),
+                    ],
+                  ),
                 ),
-                ..._colaboradoresSeleccionados.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final colab = entry.value;
-                  return TableRow(
+              )
+            else
+              Table(
+                border: TableBorder.all(color: Colors.black, width: 1),
+                columnWidths: {
+                  0: FlexColumnWidth(1),
+                  1: FlexColumnWidth(2),
+                  2: FixedColumnWidth(50),
+                },
+                children: [
+                  // Header
+                  TableRow(
+                    decoration: BoxDecoration(color: Colors.grey.shade200),
                     children: [
                       Padding(
                         padding: EdgeInsets.all(8),
-                        child: Text(colab['codigo'].toString()),
+                        child: Text('CÓDIGO', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                       Padding(
                         padding: EdgeInsets.all(8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text('${colab['nombre']} ${colab['apellido']}'),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.delete, size: 18, color: Colors.red),
-                              onPressed: () => _eliminarColaborador(index),
-                              padding: EdgeInsets.zero,
-                              constraints: BoxConstraints(),
-                            ),
-                          ],
+                        child: Text('NOMBRE', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text('', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  // Filas dinámicas con todos los colaboradores
+                  ..._colaboradoresSeleccionados.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final colab = entry.value;
+                    return TableRow(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text(colab['codigo'].toString()),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text('${colab['nombre']} ${colab['apellido']}'),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.all(4),
+                          child: IconButton(
+                            icon: Icon(Icons.delete, size: 18, color: Colors.red),
+                            onPressed: () => _eliminarColaborador(index),
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints(),
+                            tooltip: 'Eliminar',
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
+            
+            // Mensaje de advertencia si se acerca al límite
+            if (_colaboradoresSeleccionados.length >= 15 && _colaboradoresSeleccionados.length < 20)
+              Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning, size: 16, color: Colors.orange),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Acercándose al límite: ${20 - _colaboradoresSeleccionados.length} espacios restantes',
+                          style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
                         ),
                       ),
                     ],
-                  );
-                }),
-                ...List.generate(4 - _colaboradoresSeleccionados.length, (i) {
-                  return TableRow(
+                  ),
+                ),
+              ),
+            
+            // Mensaje de límite alcanzado
+            if (_colaboradoresSeleccionados.length >= 20)
+              Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
                     children: [
-                      Padding(padding: EdgeInsets.all(8), child: Text('')),
-                      Padding(padding: EdgeInsets.all(8), child: Text('')),
+                      Icon(Icons.block, size: 16, color: Colors.red),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Límite máximo alcanzado (20 colaboradores)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.red.shade900,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ],
-                  );
-                }),
-              ],
-            ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -938,7 +1363,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   }
 
   // ========================================================================
-  // 🔥 TABLA DE MATERIALES CON BOTÓN AGREGAR Y ELIMINAR
+  // TABLA DE MATERIALES CON BOTÓN AGREGAR Y ELIMINAR
   // ========================================================================
   
   Widget _buildTablaMateriales() {
@@ -1012,10 +1437,12 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                     // Filas de materias primas
                     ..._materiasPrimasSeleccionadas.map((codigo) {
                       final mp = _datosMateriasPrimas[codigo]!;
+                      final tieneReproceso = _reprocesosData[codigo] != null;
+                      final tieneMerma = _mermasData[codigo] != null;
                       
                       return TableRow(
                         children: [
-                          // 🔥 COLUMNA DE ELIMINAR
+                          // COLUMNA DE ELIMINAR
                           _buildDataCell(
                             IconButton(
                               icon: Icon(Icons.delete, size: 18, color: Colors.red),
@@ -1056,30 +1483,90 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                             ),
                           ),
                           _buildDataCell(
-                            SizedBox(
-                              width: 80,
-                              child: TextFormField(
-                                controller: _reprocesoControllers[codigo],
-                                decoration: InputDecoration(
-                                  border: InputBorder.none,
-                                  isDense: true,
+                            InkWell(
+                              onTap: () => _ingresarReproceso(codigo, mp['nombre']),
+                              child: Container(
+                                width: 80,
+                                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                decoration: BoxDecoration(
+                                  color: tieneReproceso 
+                                      ? Colors.orange.shade50 
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: tieneReproceso 
+                                        ? Colors.orange 
+                                        : Colors.grey.shade300,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                                keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                style: TextStyle(fontSize: 12),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _reprocesoControllers[codigo]!.text,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: tieneReproceso 
+                                              ? Colors.orange.shade900 
+                                              : Colors.black87,
+                                          fontWeight: tieneReproceso 
+                                              ? FontWeight.bold 
+                                              : FontWeight.normal,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.edit,
+                                      size: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                           _buildDataCell(
-                            SizedBox(
-                              width: 80,
-                              child: TextFormField(
-                                controller: _mermaControllers[codigo],
-                                decoration: InputDecoration(
-                                  border: InputBorder.none,
-                                  isDense: true,
+                            InkWell(
+                              onTap: () => _ingresarMerma(codigo, mp['nombre']),
+                              child: Container(
+                                width: 80,
+                                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                decoration: BoxDecoration(
+                                  color: tieneMerma 
+                                      ? Colors.red.shade50 
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: tieneMerma 
+                                        ? Colors.red 
+                                        : Colors.grey.shade300,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                                keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                style: TextStyle(fontSize: 12),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _mermaControllers[codigo]!.text,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: tieneMerma 
+                                              ? Colors.red.shade900 
+                                              : Colors.black87,
+                                          fontWeight: tieneMerma 
+                                              ? FontWeight.bold 
+                                              : FontWeight.normal,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.edit,
+                                      size: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -1112,8 +1599,6 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
       child: child,
     );
   }
-
-  // Resto de widgets sin cambios...
   
   Widget _buildSeccionFoto() {
     return Card(
@@ -1162,7 +1647,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                     borderRadius: BorderRadius.circular(8),
                     child: Image.memory(
                       _fotoEtiqueta!,
-                      height: 200,
+                      height: 600,
                       width: double.infinity,
                       fit: BoxFit.cover,
                     ),
@@ -1196,42 +1681,6 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                   ),
                 ],
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCodigoLote() {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'CÓDIGO COLABORADOR LOTE *',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            Divider(),
-            TextFormField(
-              controller: _codigoColaboradorLoteController,
-              decoration: InputDecoration(
-                labelText: 'Código del colaborador a cargo',
-                hintText: 'Ej: 96',
-                border: OutlineInputBorder(),
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
-              ],
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Requerido';
-                }
-                return null;
-              },
-            ),
           ],
         ),
       ),
@@ -1368,7 +1817,7 @@ class _DialogSeleccionarColaboradorState
 }
 
 // ============================================================================
-// 🔥 NUEVO DIÁLOGO: Seleccionar Materia Prima
+// Seleccionar Materia Prima
 // ============================================================================
 
 class _DialogSeleccionarMateriaPrima extends StatefulWidget {
@@ -1470,6 +1919,470 @@ class _DialogSeleccionarMateriaPrimaState
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text('Cancelar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogIngresarReproceso extends StatefulWidget {
+  final String nombreMateriaPrima;
+  final String? cantidadInicial;
+  final String? causaInicial;
+  final String unidadMedida;
+
+  const _DialogIngresarReproceso({
+    required this.nombreMateriaPrima,
+    required this.unidadMedida,
+    this.cantidadInicial,
+    this.causaInicial,
+  });
+
+  @override
+  State<_DialogIngresarReproceso> createState() => _DialogIngresarReprocesoState();
+}
+
+class _DialogIngresarReprocesoState extends State<_DialogIngresarReproceso> {
+  final _cantidadController = TextEditingController();
+  final _otraCausaController = TextEditingController();
+  String _causaSeleccionada = 'error_operador';
+  
+  // Lista de causas de reproceso (del modelo Django)
+  final List<Map<String, String>> _causasReproceso = [
+    {'value': 'escasez_de_banado', 'label': 'Escasez de Bañado'},
+    {'value': 'poca_vida_util', 'label': 'Poca Vida Útil'},
+    {'value': 'deformacion', 'label': 'Deformación'},
+    {'value': 'peso_erroneo', 'label': 'Peso Erróneo'},
+    {'value': 'mal_templado', 'label': 'Mal Templado'},
+    {'value': 'otro', 'label': 'Otro'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _cantidadController.text = widget.cantidadInicial ?? '0';
+    _causaSeleccionada = widget.causaInicial ?? 'escasez_de_banado';
+
+    if (_causaSeleccionada.startsWith('otro:')) {
+      final partes = _causaSeleccionada.split(':');
+      if (partes.length > 1) {
+        _causaSeleccionada = 'otro';
+        _otraCausaController.text = partes.sublist(1).join(':');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _cantidadController.dispose();
+    _otraCausaController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.recycling, color: Colors.orange),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Reproceso',
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Nombre de la materia prima
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.inventory_2, color: Colors.orange.shade700, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.nombreMateriaPrima,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            SizedBox(height: 20),
+            
+            // Campo de cantidad
+            Text(
+              'Cantidad de Reproceso',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            TextFormField(
+              controller: _cantidadController,
+              decoration: InputDecoration(
+                hintText: 'Ej: 5.5',
+                suffixText: widget.unidadMedida,
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.scale),
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+              ],
+            ),
+            
+            SizedBox(height: 20),
+            
+            // Selector de causa
+            Text(
+              'Causa del Reproceso',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _causaSeleccionada,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.warning_amber),
+              ),
+              items: _causasReproceso.map((causa) {
+                return DropdownMenuItem<String>(
+                  value: causa['value'],
+                  child: Text(causa['label']!),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _causaSeleccionada = value!;
+                });
+              },
+            ),
+
+            if (_causaSeleccionada == 'otro') ...[
+              SizedBox(height: 12),
+              Text(
+                'Especifica la otra causa',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              SizedBox(height: 8),
+              TextFormField(
+                controller: _otraCausaController,
+                decoration: InputDecoration(
+                  hintText: 'Escribe la causa...',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.edit),
+                ),
+                maxLength: 200,
+                maxLines: 2,
+              ),
+            ],
+            
+            SizedBox(height: 12),
+            
+            // Info adicional
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: Colors.blue.shade700),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ingresa 0 para eliminar el reproceso',
+                      style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancelar'),
+        ),
+        ElevatedButton.icon(
+          onPressed: () {
+            final cantidad = double.tryParse(_cantidadController.text.trim()) ?? 0.0;
+
+            if (_causaSeleccionada == 'otro' && _otraCausaController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Por favor especifica la otra causa'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+            
+            String causaFinal = _causaSeleccionada;
+            if (_causaSeleccionada == 'otro') {
+              causaFinal = 'otro:${_otraCausaController.text.trim()}';
+            }
+            
+            Navigator.pop(context, {
+              'cantidad': cantidad,
+              'causas': causaFinal,
+            });
+          },
+          icon: Icon(Icons.check),
+          label: Text('Guardar'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogIngresarMerma extends StatefulWidget {
+  final String nombreMateriaPrima;
+  final String? cantidadInicial;
+  final String? causaInicial;
+  final String unidadMedida;
+
+  const _DialogIngresarMerma({
+    required this.nombreMateriaPrima,
+    required this.unidadMedida,
+    this.cantidadInicial,
+    this.causaInicial,
+  });
+
+  @override
+  State<_DialogIngresarMerma> createState() => _DialogIngresarMermaState();
+}
+
+class _DialogIngresarMermaState extends State<_DialogIngresarMerma> {
+  final _cantidadController = TextEditingController();
+  final _otraCausaController = TextEditingController();
+  String _causaSeleccionada = 'desperdicio_corte';
+  
+  // Lista de causas de merma (del modelo Django)
+  final List<Map<String, String>> _causasMerma = [
+    {'value': 'cayo_al_suelo', 'label': 'Cayó al Suelo'},
+    {'value': 'por_hongos', 'label': 'Por Hongos'},
+    {'value': 'caducidad', 'label': 'Caducidad'},
+    {'value': 'grasa_maquina', 'label': 'Grasa Máquina'},
+    {'value': 'exposicion', 'label': 'Exposición'},
+    {'value': 'otro', 'label': 'Otro'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _cantidadController.text = widget.cantidadInicial ?? '0';
+    _causaSeleccionada = widget.causaInicial ?? 'cayo_al_suelo';
+
+    if (_causaSeleccionada.startsWith('otro:')) {
+      final partes = _causaSeleccionada.split(':');
+      if (partes.length > 1) {
+        _causaSeleccionada = 'otro';
+        _otraCausaController.text = partes.sublist(1).join(':');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _cantidadController.dispose();
+    _otraCausaController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.delete_outline, color: Colors.red),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Merma',
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Nombre de la materia prima
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.inventory_2, color: Colors.red.shade700, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.nombreMateriaPrima,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            SizedBox(height: 20),
+            
+            // Campo de cantidad
+            Text(
+              'Cantidad de Merma',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            TextFormField(
+              controller: _cantidadController,
+              decoration: InputDecoration(
+                hintText: 'Ej: 2.3',
+                suffixText: widget.unidadMedida,
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.scale),
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+              ],
+            ),
+            
+            SizedBox(height: 20),
+            
+            // Selector de causa
+            Text(
+              'Causa de la Merma',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _causaSeleccionada,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.warning_amber),
+              ),
+              items: _causasMerma.map((causa) {
+                return DropdownMenuItem<String>(
+                  value: causa['value'],
+                  child: Text(causa['label']!),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _causaSeleccionada = value!;
+                });
+              },
+            ),
+
+            if (_causaSeleccionada == 'otro') ...[
+              SizedBox(height: 12),
+              Text(
+                'Especifica la otra causa',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              SizedBox(height: 8),
+              TextFormField(
+                controller: _otraCausaController,
+                decoration: InputDecoration(
+                  hintText: 'Escribe la causa...',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.edit),
+                ),
+                maxLength: 200,
+                maxLines: 2,
+              ),
+            ],
+            
+            SizedBox(height: 12),
+            
+            // Info adicional
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: Colors.blue.shade700),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ingresa 0 para eliminar la merma',
+                      style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancelar'),
+        ),
+        ElevatedButton.icon(
+          onPressed: () {
+            final cantidad = double.tryParse(_cantidadController.text.trim()) ?? 0.0;
+
+            if (_causaSeleccionada == 'otro' && _otraCausaController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Por favor especifica la otra causa'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            String causaFinal = _causaSeleccionada;
+            if (_causaSeleccionada == 'otro') {
+              causaFinal = 'otro:${_otraCausaController.text.trim()}';
+            }
+            
+            Navigator.pop(context, {
+              'cantidad': cantidad,
+              'causas': causaFinal,
+            });
+          },
+          icon: Icon(Icons.check),
+          label: Text('Guardar'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+          ),
         ),
       ],
     );

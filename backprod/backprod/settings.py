@@ -161,7 +161,11 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ],
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
-    'DATE_FORMAT': '%Y-%m-%d',
+    'DATE_FORMAT': '%d-%m-%Y',
+    'DATE_INPUT_FORMATS': [
+        '%d-%m-%Y',
+        '%Y-%m-%d',
+    ],
 }
 
 

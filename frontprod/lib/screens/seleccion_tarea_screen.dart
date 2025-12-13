@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../models/linea.dart';
 import '../models/tarea.dart';
 import 'hoja_procesos_screen.dart';
+import 'trazabilidad_screen.dart';
 
 class SeleccionTareaScreen extends StatefulWidget {
   final Linea linea;
@@ -23,9 +24,11 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
   bool _isLoading = true;
   String? _error;
 
+  // Colores corporativos (rojos/guinda)
   final Color _primaryColor = const Color(0xFF891D43);
   final Color _onPrimaryColor = const Color(0xFFFFD9C6);
 
+  // Mapeo de colores por turno (manteniendo tu esquema original)
   final Map<String, ({Color base, Color border, Color text, Color border_turno, Color text_turno, Color text_producto})> _turnoSkin = {
     'AM': (
       base: const Color.fromARGB(255, 255, 249, 221),
@@ -51,8 +54,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       text_turno: const Color(0xFF2196F3),
       text_producto: const Color.fromARGB(255, 0, 0, 0),
     ),
-    // Agrega más turnos aquí si es necesario (ej: 'Extra', 'Fines de Semana')
-    // 'Extra': (base: const Color(0xFFFBEFF5), border: const Color(0xFF891D43), text: const Color(0xFF891D43)),
   };
 
   @override
@@ -76,9 +77,10 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       );
 
       setState(() {
+        // 🔥 CAMBIO CLAVE: Mostrar PENDIENTES Y EN_PROGRESO
         _tareas = data
             .map((json) => Tarea.fromJson(json))
-            .where((t) => t.estado == 'pendiente')
+            .where((t) => t.estado == 'pendiente' || t.estado == 'en_curso')
             .toList();
         _isLoading = false;
       });
@@ -90,8 +92,23 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
     }
   }
 
+  // ========================================================================
+  // 🔥 NUEVA LÓGICA: Detectar si iniciar o retomar
+  // ========================================================================
+  Future<void> _manejarTarea(Tarea tarea) async {
+    if (tarea.estado == 'pendiente') {
+      // Tarea nueva → Iniciar
+      await _iniciarTarea(tarea);
+    } else if (tarea.estado == 'en_curso') {
+      // Tarea en progreso → Retomar
+      await _retomarTarea(tarea);
+    }
+  }
+
+  // ========================================================================
+  // INICIAR TAREA NUEVA (sin cambios en la lógica original)
+  // ========================================================================
   Future<void> _iniciarTarea(Tarea tarea) async {
-    // Confirmación
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -146,7 +163,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
 
     if (confirmar != true) return;
 
-    // Mostrar loading
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -168,13 +184,11 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
     );
 
     try {
-      // Iniciar tarea
       await _apiService.iniciarTarea(tarea.id);
 
       if (!mounted) return;
-      Navigator.pop(context); // Cerrar loading
+      Navigator.pop(context);
 
-      // Navegar a hoja de procesos
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -183,7 +197,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Cerrar loading
+      Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -192,6 +206,207 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
         ),
       );
     }
+  }
+
+  // ========================================================================
+  // 🔥 NUEVA FUNCIÓN: Retomar tarea en progreso
+  // ========================================================================
+  Future<void> _retomarTarea(Tarea tarea) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text('Verificando estado...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // Obtener hoja de procesos para verificar estado
+      final hojaProcesos = await _apiService.getHojaProcesosPorTarea(tarea.id);
+      
+      if (!mounted) return;
+      Navigator.pop(context); // Cerrar loading
+
+      final hojaId = hojaProcesos['id'];
+      final tieneTrazabilidad = hojaProcesos['tiene_trazabilidad'] ?? false;
+      final hojaFinalizada = hojaProcesos['finalizada'] ?? false; // ✅ USAR 'finalizada' en lugar de 'hora_fin'
+
+      if (tieneTrazabilidad) {
+        // Ya completada → Mensaje
+        _mostrarMensaje(
+          '✅ Esta tarea ya está completada con trazabilidad registrada',
+          Colors.green,
+        );
+      } else if (hojaFinalizada) {
+        // Eventos finalizados, falta trazabilidad → Ir a trazabilidad
+        final confirmar = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.assignment, color: _primaryColor),
+                SizedBox(width: 8),
+                Text('Continuar Trazabilidad'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Esta tarea ya tiene los eventos registrados.'),
+                SizedBox(height: 12),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning, color: Colors.orange, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Falta completar la trazabilidad',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  '¿Deseas continuar con el registro de trazabilidad?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primaryColor,
+                ),
+                child: Text('Continuar'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmar == true && mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TrazabilidadScreen(
+                tareaId: tarea.id,
+                hojaProcesosId: hojaId,
+              ),
+            ),
+          );
+        }
+      } else {
+        // Eventos sin finalizar → Ir a hoja de procesos
+        final confirmar = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.play_circle, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('Continuar Registro'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Esta tarea está en curso.'),
+                SizedBox(height: 12),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tarea.productoNombre,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text('Turno: ${tarea.turnoNombre}'),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  '¿Deseas continuar registrando eventos?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                ),
+                child: Text('Continuar'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmar == true && mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HojaProcesosScreen(tareaId: tarea.id),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Cerrar loading
+      _mostrarMensaje('Error: $e', Colors.red);
+    }
+  }
+
+  void _mostrarMensaje(String mensaje, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: color,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   Color _getEstadoColor(String estado) {
@@ -216,7 +431,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
           slivers: [
             _buildHeaderFijo(context),
             
-            // Contenido deslizable
             SliverFillRemaining(
               hasScrollBody: true,
               child: Container(
@@ -256,24 +470,22 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       elevation: 0,
       toolbarHeight: 120, 
       
-      // Botón de atrás (izquierda)
       leading: Padding(
         padding: const EdgeInsets.only(left: 16.0),
         child: GestureDetector(
           onTap: () => Navigator.of(context).pop(),
           child: CircleAvatar(
-            backgroundColor: _onPrimaryColor, // Color crema
+            backgroundColor: _onPrimaryColor,
             radius: 22,
             child: Icon(
               Icons.arrow_back,
-              color: _primaryColor, // Color guinda
+              color: _primaryColor,
               size: 35,
             ),
           ),
         ),
       ),
       
-      // Título Central
       title: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -291,7 +503,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       ),
       centerTitle: true,
       
-      // Logo (derecha)
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 16.0),
@@ -301,9 +512,9 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
             child: Image.asset(
               'assets/images/logo_entrelagosE.png',
               fit: BoxFit.contain,
-              color: _onPrimaryColor, // Lo tintamos del color crema
+              color: _onPrimaryColor,
               errorBuilder: (context, error, stackTrace) => Icon(
-                Icons.emoji_events, // Placeholder
+                Icons.emoji_events,
                 color: _onPrimaryColor,
                 size: 30,
               ),
@@ -342,7 +553,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
+            CircularProgressIndicator(color: _primaryColor),
             const SizedBox(height: 16),
             Text('Cargando tareas...'),
           ],
@@ -365,6 +576,10 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
               onPressed: _cargarTareas,
               icon: Icon(Icons.refresh),
               label: Text('Reintentar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryColor,
+                foregroundColor: _onPrimaryColor,
+              ),
             ),
           ],
         ),
@@ -379,7 +594,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
             Icon(Icons.assignment_outlined, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'No hay tareas pendientes',
+              'No hay tareas disponibles',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -392,6 +607,9 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
               onPressed: _cargarTareas,
               icon: Icon(Icons.refresh),
               label: Text('Actualizar'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _primaryColor,
+              ),
             ),
           ],
         ),
@@ -400,6 +618,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
 
     return RefreshIndicator(
       onRefresh: _cargarTareas,
+      color: _primaryColor,
       child: ListView.builder(
         padding: EdgeInsets.all(16),
         itemCount: _tareas.length,
@@ -412,26 +631,27 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
   }
 
   Widget _buildTareaCard(Tarea tarea) {
-    // 1. Obtener la configuración de estilo basada en el nombre del turno
     final turnoStyle = _turnoSkin[tarea.turnoNombre] ?? _turnoSkin['AM']!;
-    
-    // Color específico del estado
     final estadoColor = _getEstadoColor(tarea.estado);
-    
-    // Formato de número para la meta
     final formatter = NumberFormat('#,##0', 'es_CL');
-    final metaDisplay = '${formatter.format(tarea.metaProduccion)} unidades'; // Asumo unidades
+    final metaDisplay = '${formatter.format(tarea.metaProduccion)} unidades';
+
+    // 🔥 DETERMINAR SI ES TAREA EN PROGRESO
+    final esEnProgreso = tarea.estado == 'en_curso';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
-      elevation: 6,
+      elevation: esEnProgreso ? 8 : 6, // 🔥 Más elevación si está en progreso
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
+        side: esEnProgreso 
+            ? BorderSide(color: Colors.blue, width: 3) // 🔥 Borde azul si está en progreso
+            : BorderSide.none,
       ),
-      color: turnoStyle.base, // Color de fondo dinámico
+      color: turnoStyle.base,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _iniciarTarea(tarea),
+        onTap: () => _manejarTarea(tarea), // 🔥 NUEVA FUNCIÓN
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -442,7 +662,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Icono de Turno (Círculo con hora)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -459,7 +678,8 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                     ),
                   ),
                   const Spacer(),
-                  // Etiqueta de Estado
+                  
+                  // 🔥 BADGE DE ESTADO
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -467,13 +687,24 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: estadoColor, width: 1.5),
                     ),
-                    child: Text(
-                      tarea.estadoDisplay,
-                      style: TextStyle(
-                        color: estadoColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          esEnProgreso ? Icons.play_circle : Icons.schedule,
+                          size: 14,
+                          color: estadoColor,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          tarea.estadoDisplay,
+                          style: TextStyle(
+                            color: estadoColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -481,7 +712,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
               
               const SizedBox(height: 16),
 
-              // Producto y Código
+              // Producto
               Text(
                 '${tarea.productoCodigo} - ${tarea.productoNombre}',
                 style: TextStyle(
@@ -492,14 +723,13 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
               ),
               const SizedBox(height: 4),
 
-
-              // Meta (Rectángulo con borde y relleno verde)
+              // Meta
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white, // Fondo blanco para que destaque
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: turnoStyle.border, width: 3), // Borde basado en el turno
+                  border: Border.all(color: turnoStyle.border, width: 3),
                   boxShadow: [
                     BoxShadow(
                       color: turnoStyle.border.withOpacity(0.2),
@@ -533,23 +763,26 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Botón de iniciar
+              // 🔥 BOTÓN DINÁMICO: Iniciar o Retomar
               SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: () => _iniciarTarea(tarea),
-                  icon: const Icon(Icons.play_arrow, size: 28),
-                  label: const Text(
-                    'INICIAR PRODUCCIÓN',
+                  onPressed: () => _manejarTarea(tarea),
+                  icon: Icon(
+                    esEnProgreso ? Icons.play_arrow : Icons.play_arrow,
+                    size: 28,
+                  ),
+                  label: Text(
+                    esEnProgreso ? 'RETOMAR PRODUCCIÓN' : 'INICIAR PRODUCCIÓN',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _primaryColor, // Color guinda para el botón
-                    foregroundColor: _onPrimaryColor, // Texto crema
+                    backgroundColor: esEnProgreso ? _primaryColor : _primaryColor,
+                    foregroundColor: _onPrimaryColor,
                     elevation: 8,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -557,6 +790,34 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   ),
                 ),
               ),
+              
+              // 🔥 MENSAJE SI ESTÁ EN PROGRESO
+              if (esEnProgreso) ...[
+                SizedBox(height: 8),
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info, size: 16, color: Colors.blue.shade700),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Esta tarea ya fue iniciada. Puedes continuar desde donde quedó.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

@@ -302,12 +302,16 @@ class TareaDetailSerializer(serializers.ModelSerializer):
     colaboradores = serializers.SerializerMethodField()
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     duracion_minutos = serializers.IntegerField(read_only=True)
+    juliano_fecha_tarea = serializers.SerializerMethodField()
+    fecha_elaboracion_real = serializers.SerializerMethodField()
     
     class Meta:
         model = Tarea
         fields = [
             'id',
             'fecha',
+            'fecha_elaboracion_real',
+            'juliano_fecha_tarea',
             'linea',
             'linea_detalle',
             'turno',
@@ -333,6 +337,22 @@ class TareaDetailSerializer(serializers.ModelSerializer):
             'fecha_finalizacion',
             'duracion_minutos'
         ]
+
+    def get_juliano_fecha_tarea(self, obj):
+        """Calcula el día juliano de la fecha de la tarea"""
+        return obj.fecha.timetuple().tm_yday
+    
+    def get_fecha_elaboracion_real(self, obj):
+        """
+        Retorna la fecha REAL de elaboración (cuando se inició la tarea).
+        Si la tarea no se ha iniciado, retorna la fecha planificada.
+        """
+        if obj.fecha_inicio:
+            # Retornar solo la FECHA (sin hora) en formato DD-MM-YYYY
+            return obj.fecha_inicio.strftime('%d-%m-%Y')
+        else:
+            # Si aún no se ha iniciado, mostrar la fecha planificada
+            return obj.fecha.strftime('%d-%m-%Y')
     
     def get_colaboradores(self, obj):
         """Retorna los colaboradores asignados a la tarea"""
@@ -653,6 +673,7 @@ class HojaProcesosDetailSerializer(serializers.ModelSerializer):
     
     tarea_detalle = TareaDetailSerializer(source='tarea', read_only=True)
     eventos = EventoProcesoListSerializer(many=True, read_only=True)
+    tiene_trazabilidad = serializers.SerializerMethodField()
     
     class Meta:
         model = HojaProcesos
@@ -663,8 +684,20 @@ class HojaProcesosDetailSerializer(serializers.ModelSerializer):
             'fecha_inicio',
             'fecha_finalizacion',
             'finalizada',
-            'eventos'
+            'eventos',
+            'tiene_trazabilidad'
         ]
+    def get_tiene_trazabilidad(self, obj):
+        """
+        Verifica si existe un registro de Trazabilidad asociado a esta hoja de procesos.
+        Utiliza la relación OneToOne inversa 'trazabilidad'.
+        
+        Relación: HojaProcesos <-- OneToOne(related_name='trazabilidad') -- Trazabilidad
+        
+        Returns:
+            bool: True si existe trazabilidad, False en caso contrario
+        """
+        return hasattr(obj, 'trazabilidad') and obj.trazabilidad is not None
 
 
 # ============================================================================

@@ -4,9 +4,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
+import 'dart:io';
 
 class DetalleTrazabilidadSupervisorScreen extends StatefulWidget {
   final int trazabilidadId;
@@ -41,23 +41,29 @@ class _DetalleTrazabilidadSupervisorScreenState
   // ========== DATOS PARA EDICIÓN ==========
   final TextEditingController _cantidadProducidaController = TextEditingController();
   final TextEditingController _observacionesController = TextEditingController();
+  final TextEditingController _codigoColaboradorLoteController = TextEditingController();
 
   Uint8List? _fotoEtiqueta;
   String? _nombreArchivoFoto;
   String? _fotoEtiquetasUrl;
   
-  // Materias primas: Map<materia_prima_id, Map<lote, cantidad, unidad>>
-  Map<String, Map<String, dynamic>> _materiasPrimasEditadas = {};
+  final List<String> _materiasPrimasSeleccionadas = [];
+  final Map<String, Map<String, dynamic>> _datosMateriasPrimas = {};
+  final Map<String, TextEditingController> _loteControllers = {};
+  final Map<String, TextEditingController> _consumoControllers = {};
+  final Map<String, Map<String, dynamic>?> _reprocesosData = {}; 
+  final Map<String, Map<String, dynamic>?> _mermasData = {};
+  final Map<String, TextEditingController> _reprocesoControllers = {};
+  final Map<String, TextEditingController> _mermaControllers = {};
   
-  // Reprocesos y mermas
-  List<Map<String, dynamic>> _reprocesosEditados = [];
-  List<Map<String, dynamic>> _mermasEditadas = [];
-  
-  // Colaboradores
   List<Map<String, dynamic>> _colaboradoresSeleccionados = [];
   List<Map<String, dynamic>> _todosColaboradores = [];
+  
+  List<Map<String, dynamic>> _todasMateriasPrimasDisponibles = [];
 
   final ApiService _apiService = ApiService();
+
+  Map<String, dynamic>? _tarea;
 
   @override
   void initState() {
@@ -69,6 +75,11 @@ class _DetalleTrazabilidadSupervisorScreenState
   void dispose() {
     _cantidadProducidaController.dispose();
     _observacionesController.dispose();
+    _codigoColaboradorLoteController.dispose();
+    _loteControllers.values.forEach((c) => c.dispose());
+    _consumoControllers.values.forEach((c) => c.dispose());
+    _reprocesoControllers.values.forEach((c) => c.dispose());
+    _mermaControllers.values.forEach((c) => c.dispose());
     super.dispose();
   }
 
@@ -82,24 +93,51 @@ class _DetalleTrazabilidadSupervisorScreenState
     try {
       final data = await _apiService.getTrazabilidadDetalle(widget.trazabilidadId);
       
-      // Cargar todos los colaboradores disponibles
       final todosColabs = await _apiService.getColaboradores();
+      final todasMPData = await _apiService.getMateriasPrimas();
 
       setState(() {
         _trazabilidad = data;
-        
-        // ========== INICIALIZAR DATOS ORIGINALES ==========
+        _tarea = data['hoja_procesos_detalle']?['tarea'];
+
+        final lote = data['lote']?.toString() ?? '';
+        if (lote.isNotEmpty) {
+          final partes = lote.split('-');
+          if (partes.length >= 3) {
+            _codigoColaboradorLoteController.text = partes[2];
+          }
+        }
+      
         _cantidadProducidaOriginal = (data['cantidad_producida']?? 0).toString();
         _observacionesOriginal = data['observaciones'] ?? '';
         
-        // Inicializar controllers
         _cantidadProducidaController.text = _cantidadProducidaOriginal;
         _observacionesController.text = _observacionesOriginal;
         
-        // ========== MATERIAS PRIMAS ORIGINALES ==========
+        _todasMateriasPrimasDisponibles = List<Map<String, dynamic>>.from(
+          todasMPData.map((mp) => {
+            'codigo': mp['codigo'],
+            'nombre': mp['nombre'],
+            'unidad_medida': mp['unidad_medida'] ?? 'kg',
+            'requiere_lote': mp['requiere_lote'] ?? false,
+          })
+        );
+        _materiasPrimasSeleccionadas.clear();
         _materiasPrimasOriginales.clear();
-        _materiasPrimasEditadas.clear();
+        _datosMateriasPrimas.clear();
+
+        _loteControllers.values.forEach((c) => c.dispose());
+        _consumoControllers.values.forEach((c) => c.dispose());
+        _reprocesoControllers.values.forEach((c) => c.dispose());
+        _mermaControllers.values.forEach((c) => c.dispose());
         
+        _loteControllers.clear();
+        _consumoControllers.clear();
+        _reprocesoControllers.clear();
+        _mermaControllers.clear();
+        _reprocesosData.clear();
+        _mermasData.clear();
+
         final mpUsadas = data['materias_primas_usadas'] as List? ?? [];
         
         for (var mp in mpUsadas) {
@@ -107,42 +145,61 @@ class _DetalleTrazabilidadSupervisorScreenState
           if (mpDetalle == null) continue;
           
           final codigo = (mpDetalle['codigo'] ?? '').toString();
+
+          _materiasPrimasSeleccionadas.add(codigo);
           
-          final mpData = {
-            'id': mp['id'],
+          _loteControllers[codigo] = TextEditingController(
+            text: (mp['lote'] ?? '').toString()
+          );
+          _consumoControllers[codigo] = TextEditingController(
+            text: (mp['cantidad_usada'] ?? 0).toString()
+          );
+          
+          final reprocesos = mp['reprocesos'] as List? ?? [];
+          if (reprocesos.isNotEmpty) {
+            final reproceso = reprocesos[0];
+            _reprocesosData[codigo] = {
+              'cantidad': reproceso['cantidad'],
+              'causas': reproceso['causas'],
+            };
+            _reprocesoControllers[codigo] = TextEditingController(
+              text: reproceso['cantidad'].toString()
+            );
+          } else {
+            _reprocesosData[codigo] = null;
+            _reprocesoControllers[codigo] = TextEditingController(text: '0');
+          }
+
+          final mermas = mp['mermas'] as List? ?? [];
+          if (mermas.isNotEmpty) {
+            final merma = mermas[0];
+            _mermasData[codigo] = {
+              'cantidad': merma['cantidad'],
+              'causas': merma['causas'],
+            };
+            _mermaControllers[codigo] = TextEditingController(
+              text: merma['cantidad'].toString()
+            );
+          } else {
+            _mermasData[codigo] = null;
+            _mermaControllers[codigo] = TextEditingController(text: '0');
+          }
+
+          _datosMateriasPrimas[codigo] = {
             'materia_prima_id': codigo,
             'nombre': (mpDetalle['nombre'] ?? 'Sin nombre').toString(),
-            'lote': (mp['lote'] ?? '').toString(),
-            'cantidad_usada': (mp['cantidad_usada'] ?? 0).toString(),
-            'unidad_medida': (mp['unidad_medida'] ?? 'kg').toString(),
+            'unidad_medida': (mpDetalle['unidad_medida'] ?? mp['unidad_medida'] ?? 'kg').toString(),
             'requiere_lote': mpDetalle['requiere_lote'] ?? false,
           };
           
-          _materiasPrimasOriginales[codigo] = Map<String, dynamic>.from(mpData);
-          _materiasPrimasEditadas[codigo] = Map<String, dynamic>.from(mpData);
+          _materiasPrimasOriginales[codigo] = Map<String, dynamic>.from(
+            _datosMateriasPrimas[codigo]!
+          );
         }
-        
-        // ========== REPROCESOS ORIGINALES ==========
-        final reprocesos = data['reprocesos'] as List? ?? [];
-        print('♻️ Reprocesos: ${reprocesos.length}');
-        
-        _reprocesosOriginales = reprocesos.map((r) => Map<String, dynamic>.from(r)).toList();
-        _reprocesosEditados = reprocesos.map((r) => Map<String, dynamic>.from(r)).toList();
-        
-        // ========== MERMAS ORIGINALES ==========
-        final mermas = data['mermas'] as List? ?? [];
-        print('🗑️ Mermas: ${mermas.length}');
-        
-        _mermasOriginales = mermas.map((m) => Map<String, dynamic>.from(m)).toList();
-        _mermasEditadas = mermas.map((m) => Map<String, dynamic>.from(m)).toList();
-        
-        // ========== COLABORADORES ORIGINALES ==========
+
         final colaboradoresReales = data['colaboradores_reales'] as List? ?? [];
-        print('👷 Colaboradores en trazabilidad: ${colaboradoresReales.length}');
-        print('📋 Datos colaboradores: $colaboradoresReales');
-        
+
         _colaboradoresOriginales = colaboradoresReales.map<Map<String, dynamic>>((c) {
-          // Extraer datos del colaborador
           final colaborador = c is Map && c.containsKey('colaborador') 
               ? c['colaborador'] 
               : c;
@@ -152,18 +209,12 @@ class _DetalleTrazabilidadSupervisorScreenState
           }
           
           final codigo = colaborador['codigo'];
-          final codigoInt = codigo is int ? codigo : (codigo != null ? int.tryParse(codigo.toString()) ?? 0 : 0);
+          final codigoInt = codigo is int ? codigo : int.tryParse(codigo.toString()) ?? 0;
 
-          final nombre = colaborador['nombre']?.toString() ?? '';
-          final apellido = colaborador['apellido']?.toString() ?? '';
-          if (nombre.isEmpty && apellido.isEmpty && codigoInt == 0) {
-            return <String, dynamic>{}; // Retornar vacío
-          }
-          
           return {
             'codigo': codigoInt,
-            'nombre': nombre,
-            'apellido': apellido,
+            'nombre': colaborador['nombre']?.toString() ?? '',
+            'apellido': colaborador['apellido']?.toString() ?? '',
           };
         }).where((c) => c.isNotEmpty).toList();
         
@@ -171,10 +222,9 @@ class _DetalleTrazabilidadSupervisorScreenState
           (c) => Map<String, dynamic>.from(c)
         ).toList();
         
-        // Guardar todos los colaboradores disponibles
         _todosColaboradores = todosColabs.map<Map<String, dynamic>>((c) {
           final codigo = c['codigo'];
-          final codigoInt = codigo is int ? codigo : (codigo != null ? int.tryParse(codigo.toString()) ?? 0 : 0);
+          final codigoInt = codigo is int ? codigo : int.tryParse(codigo.toString()) ?? 0;
           
           return {
             'codigo': codigoInt,
@@ -183,7 +233,6 @@ class _DetalleTrazabilidadSupervisorScreenState
           };
         }).toList();
         
-        // ========== CARGAR FOTO DE ETIQUETAS ==========
         if (data['foto_etiquetas'] != null && 
             data['foto_etiquetas'].toString().isNotEmpty) {
             _fotoEtiquetasUrl = data['foto_etiquetas'].toString();
@@ -204,42 +253,30 @@ class _DetalleTrazabilidadSupervisorScreenState
   // ========== CANCELAR EDICIÓN (REVERTIR CAMBIOS) ==========
   void _cancelarEdicion() {
     setState(() {
-      // Revertir controllers
       _cantidadProducidaController.text = _cantidadProducidaOriginal;
       _observacionesController.text = _observacionesOriginal;
-      
-      // Revertir materias primas
-      _materiasPrimasEditadas.clear();
-      for (var entry in _materiasPrimasOriginales.entries) {
-        _materiasPrimasEditadas[entry.key] = Map<String, dynamic>.from(entry.value);
-      }
-      
-      // Revertir reprocesos
-      _reprocesosEditados = _reprocesosOriginales.map(
-        (r) => Map<String, dynamic>.from(r)
-      ).toList();
-      
-      // Revertir mermas
-      _mermasEditadas = _mermasOriginales.map(
-        (m) => Map<String, dynamic>.from(m)
-      ).toList();
-      
-      // Revertir colaboradores
+
       _colaboradoresSeleccionados = _colaboradoresOriginales.map(
         (c) => Map<String, dynamic>.from(c)
       ).toList();
-      
-      // Salir del modo edición
+
       _modoEdicion = false;
     });
-    
-    print('↩️ Cambios revertidos');
+
+    _cargarTrazabilidad();
+  }
+
+  void _mostrarError(String mensaje) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   // ========== GUARDAR CAMBIOS ==========
   Future<void> _guardarCambios() async {
-    print('💾 Iniciando guardado de cambios...');
-    
     // Validar cantidad producida
     final cantidadProducida = int.tryParse(_cantidadProducidaController.text);
     if (cantidadProducida == null || cantidadProducida <= 0) {
@@ -319,15 +356,16 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
 
     // Validar materias primas
-    for (var mp in _materiasPrimasEditadas.values) {
-      final cantidadStr = mp['cantidad_usada'].toString().trim();
+    for (var codigo in _materiasPrimasSeleccionadas) {
+      final mp = _datosMateriasPrimas[codigo]!;
+      final cantidadStr = _consumoControllers[codigo]!.text.trim();
       if (cantidadStr.isEmpty || double.tryParse(cantidadStr) == null) {
         _mostrarError('Completa todas las cantidades de materias primas');
         return;
       }
       
       if (mp['requiere_lote'] == true) {
-        final lote = mp['lote']?.toString().trim() ?? '';
+        final lote = _loteControllers[codigo]!.text.trim();
         if (lote.isEmpty) {
           _mostrarError('${mp['nombre']} requiere lote');
           return;
@@ -340,66 +378,70 @@ class _DetalleTrazabilidadSupervisorScreenState
     });
 
     try {
-      // Preparar datos para enviar
+      List<Map<String, dynamic>> materiasPrimasData = [];
+      
+      for (String codigo in _materiasPrimasSeleccionadas) {
+        final mp = _datosMateriasPrimas[codigo]!;
+        final lote = _loteControllers[codigo]!.text.trim();
+        
+        Map<String, dynamic> mpData = {
+          'materia_prima_id': codigo,
+          'lote': lote.isEmpty ? null : lote,
+          'cantidad_usada': double.parse(_consumoControllers[codigo]!.text),
+          'unidad_medida': mp['unidad_medida'],
+        };
+
+        final reprocesoData = _reprocesosData[codigo];
+        if (reprocesoData != null && reprocesoData['cantidad'] > 0) {
+          mpData['reprocesos'] = [
+            {
+              'cantidad': reprocesoData['cantidad'],
+              'causas': reprocesoData['causas'],
+            }
+          ];
+        }
+
+        final mermaData = _mermasData[codigo];
+        if (mermaData != null && mermaData['cantidad'] > 0) {
+          mpData['mermas'] = [
+            {
+              'cantidad': mermaData['cantidad'],
+              'causas': mermaData['causas'],
+            }
+          ];
+        }
+
+        materiasPrimasData.add(mpData);
+      }
+
       final datos = {
         'cantidad_producida': cantidadProducida,
         'observaciones': _observacionesController.text.trim(),
-        'materias_primas': _materiasPrimasEditadas.values.map((mp) {
-          final lote = mp['lote']?.toString().trim() ?? '';
-          return {
-            'materia_prima_id': mp['materia_prima_id'],
-            'lote': lote.isEmpty ? null : lote,
-            'cantidad_usada': double.parse(mp['cantidad_usada'].toString()),
-            'unidad_medida': mp['unidad_medida'],
-          };
-        }).toList(),
-        'reprocesos_data': _reprocesosEditados.map((r) => {
-          'cantidad_kg': r['cantidad_kg'] is double 
-              ? r['cantidad_kg'] 
-              : double.parse(r['cantidad_kg'].toString()),
-          'descripcion': r['descripcion']?.toString() ?? '',
-        }).toList(),
-        'mermas_data': _mermasEditadas.map((m) => {
-          'cantidad_kg': m['cantidad_kg'] is double 
-              ? m['cantidad_kg'] 
-              : double.parse(m['cantidad_kg'].toString()),
-          'descripcion': m['descripcion']?.toString() ?? '',
-        }).toList(),
+        'materias_primas': materiasPrimasData,
         'colaboradores_codigos': _colaboradoresSeleccionados
             .map((c) => c['codigo'] as int)
             .toList(),
+        'codigo_colaborador_lote': _codigoColaboradorLoteController.text.trim(),
       };
 
-      print('📤 Datos a enviar: $datos');
-
-      // ========================================================================
-      // SIEMPRE ENVIAR CON FOTO (nueva o existente)
-      // ========================================================================
       List<int>? fotoBytesParaEnviar;
       String? nombreArchivoParaEnviar;
 
       if (_fotoEtiqueta != null) {
-        // Hay foto NUEVA cargada en memoria
-        print('📷 Enviando NUEVA foto...');
         fotoBytesParaEnviar = _fotoEtiqueta;
         nombreArchivoParaEnviar = _nombreArchivoFoto ?? 
             'etiqueta_${DateTime.now().millisecondsSinceEpoch}.jpg';
       } else if (_fotoEtiquetasUrl != null) {
-        // Solo hay URL de foto existente - NO enviar foto (el backend la mantiene)
-        print('📷 Manteniendo foto existente (URL: $_fotoEtiquetasUrl)');
         fotoBytesParaEnviar = null;
         nombreArchivoParaEnviar = null;
       }
 
-      // Llamar al método unificado
       await _apiService.updateTrazabilidad(
         widget.trazabilidadId,
         datos,
         fotoBytes: fotoBytesParaEnviar,
         nombreArchivo: nombreArchivoParaEnviar,
       );
-
-      print('✅ Cambios guardados exitosamente');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -409,16 +451,13 @@ class _DetalleTrazabilidadSupervisorScreenState
           ),
         );
 
-        // Salir del modo edición
         setState(() {
           _modoEdicion = false;
         });
 
-        // Recargar datos del servidor
         await _cargarTrazabilidad();
       }
     } catch (e) {
-      print('❌ ERROR al guardar: $e');
       if (mounted) {
         _mostrarError('Error al guardar: $e');
       }
@@ -431,49 +470,184 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
   }
   // ========== AGREGAR/ELIMINAR REPROCESO ==========
-  void _agregarReproceso() async {
+  Future<void> _ingresarReproceso(String codigoMP, String nombreMP) async {
+    final reprocesoActual = _reprocesosData[codigoMP];
+    final mp = _datosMateriasPrimas[codigoMP]!;
+    
     final resultado = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => const _DialogReproceso(),
+      builder: (context) => _DialogIngresarReproceso(
+        nombreMateriaPrima: nombreMP,
+        unidadMedida: mp['unidad_medida'],
+        cantidadInicial: reprocesoActual?['cantidad']?.toString(),
+        causaInicial: reprocesoActual?['causas'],
+      ),
     );
     
     if (resultado != null) {
       setState(() {
-        _reprocesosEditados.add(resultado);
+        if (resultado['cantidad'] == 0.0) {
+          _reprocesosData[codigoMP] = null;
+          _reprocesoControllers[codigoMP]!.text = '0';
+        } else {
+          _reprocesosData[codigoMP] = resultado;
+          _reprocesoControllers[codigoMP]!.text = resultado['cantidad'].toString();
+        }
       });
-      print('✅ Reproceso agregado: $resultado');
     }
-  }
-
-  void _eliminarReproceso(int index) {
-    setState(() {
-      _reprocesosEditados.removeAt(index);
-    });
   }
 
   // ========== AGREGAR/ELIMINAR MERMA ==========
-  void _agregarMerma() async {
+  Future<void> _ingresarMerma(String codigoMP, String nombreMP) async {
+    final mermaActual = _mermasData[codigoMP];
+    final mp = _datosMateriasPrimas[codigoMP]!;
+    
     final resultado = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => const _DialogMerma(),
+      builder: (context) => _DialogIngresarMerma(
+        nombreMateriaPrima: nombreMP,
+        unidadMedida: mp['unidad_medida'],
+        cantidadInicial: mermaActual?['cantidad']?.toString(),
+        causaInicial: mermaActual?['causas'],
+      ),
     );
     
     if (resultado != null) {
       setState(() {
-        _mermasEditadas.add(resultado);
+        if (resultado['cantidad'] == 0.0) {
+          _mermasData[codigoMP] = null;
+          _mermaControllers[codigoMP]!.text = '0';
+        } else {
+          _mermasData[codigoMP] = resultado;
+          _mermaControllers[codigoMP]!.text = resultado['cantidad'].toString();
+        }
       });
-      print('✅ Merma agregada: $resultado');
     }
   }
 
-  void _eliminarMerma(int index) {
-    setState(() {
-      _mermasEditadas.removeAt(index);
-    });
+  Future<void> _agregarMateriaPrima() async {
+    final mpDisponibles = _todasMateriasPrimasDisponibles.where((mp) {
+      return !_materiasPrimasSeleccionadas.contains(mp['codigo']);
+    }).toList();
+    
+    if (mpDisponibles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No hay más materias primas disponibles para agregar'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    final mpSeleccionada = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _DialogSeleccionarMateriaPrima(
+        materiasPrimas: mpDisponibles,
+      ),
+    );
+    
+    if (mpSeleccionada != null) {
+      setState(() {
+        final codigo = mpSeleccionada['codigo'];
+        _materiasPrimasSeleccionadas.add(codigo);
+        
+        _loteControllers[codigo] = TextEditingController();
+        _consumoControllers[codigo] = TextEditingController();
+        _reprocesoControllers[codigo] = TextEditingController(text: '0');
+        _mermaControllers[codigo] = TextEditingController(text: '0');
+        
+        _reprocesosData[codigo] = null;
+        _mermasData[codigo] = null;
+        
+        _datosMateriasPrimas[codigo] = {
+          'materia_prima_id': codigo,
+          'nombre': mpSeleccionada['nombre'],
+          'unidad_medida': mpSeleccionada['unidad_medida'],
+          'requiere_lote': mpSeleccionada['requiere_lote'],
+        };
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${mpSeleccionada['nombre']} agregada'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
-  // ========== AGREGAR/ELIMINAR COLABORADOR ==========
+  void _eliminarMateriaPrima(String codigo) {
+    final mp = _datosMateriasPrimas[codigo];
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Eliminar Materia Prima'),
+          ],
+        ),
+        content: Text(
+          '¿Estás seguro de eliminar "${mp!['nombre']}"?\n\n'
+          'Se perderán todos los datos ingresados para esta materia prima.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _materiasPrimasSeleccionadas.remove(codigo);
+                
+                _datosMateriasPrimas.remove(codigo);
+                _loteControllers[codigo]?.dispose();
+                _consumoControllers[codigo]?.dispose();
+                _reprocesoControllers[codigo]?.dispose();
+                _mermaControllers[codigo]?.dispose();
+                
+                _loteControllers.remove(codigo);
+                _consumoControllers.remove(codigo);
+                _reprocesoControllers.remove(codigo);
+                _mermaControllers.remove(codigo);
+
+                _reprocesosData.remove(codigo);
+                _mermasData.remove(codigo);
+              });
+              
+              Navigator.pop(context);
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Materia prima eliminada'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _agregarColaborador() async {
+    if (_colaboradoresSeleccionados.length >= 20) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pueden agregar más de 20 colaboradores'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
     final colaboradoresDisponibles = _todosColaboradores.where((colab) {
       return !_colaboradoresSeleccionados.any(
         (sel) => sel['codigo'] == colab['codigo']
@@ -555,8 +729,6 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
   }
 
-
-  // ========== FIRMAR TRAZABILIDAD ==========
   Future<void> _firmarTrazabilidad() async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -615,171 +787,366 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
   }
 
-  void _mostrarError(String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(mensaje),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
   // ========== UI: INFORMACIÓN DE LA TAREA ==========
-  Widget _buildSeccionTarea() {
-    // Validación inicial
-    if (_trazabilidad == null) {
-      return const SizedBox.shrink();
-    }
+ Widget _buildEncabezado() {
+  final firmas = _trazabilidad!['firmas'] as List? ?? [];
+  final tieneFirmaSupervisor = firmas.any(
+    (f) => f is Map && f['tipo_firma'] == 'supervisor',
+  );
+  if (_tarea == null) return SizedBox.shrink();
+  
+  final producto = _tarea!['producto_detalle'] ?? _tarea!['producto'];
+  final linea = _tarea!['linea_detalle'] ?? _tarea!['linea'];
+  final turno = _tarea!['turno_detalle'] ?? _tarea!['turno'];
+  
+  if (producto == null || linea == null || turno == null) {
+    return SizedBox.shrink();
+  }
+  
+  final juliano = _trazabilidad!['juliano'];
+  final lote = _trazabilidad!['lote'];
+  final fechaElaboracion = _tarea!['fecha_elaboracion_real'] ?? _tarea!['fecha'];
 
-    final hojaProcesos = _trazabilidad!['hoja_procesos_detalle'];
-    if (hojaProcesos == null || hojaProcesos is! Map<String, dynamic>) {
-      return const SizedBox.shrink();
-    }
+  return Card(
+    elevation: 4,
+    margin: EdgeInsets.all(16),
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('F. ELAB.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(fechaElaboracion ?? ''),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('JULIANO:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(juliano?.toString() ?? 'N/A'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('TURNO:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(turno['nombre'] ?? ''),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          SizedBox(height: 16),
+          
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade300, width: 2),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.qr_code_2, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text(
+                      'LOTE GENERADO',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.blue.shade900,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 12),
+                
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.blue, width: 2),
+                  ),
+                  child: Text(
+                    lote?.toString() ?? 'Sin lote',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade900,
+                      letterSpacing: 1.5,
+                      fontFamily: 'monospace',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
 
-    final tarea = hojaProcesos['tarea'];
-    if (tarea == null || tarea is! Map<String, dynamic>) {
-      return const SizedBox.shrink();
-    }
+                if (_modoEdicion && !tieneFirmaSupervisor) ...[
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.badge, size: 20, color: Colors.blue.shade700),
+                      SizedBox(width: 8),
+                      Text(
+                        'Código del Colaborador',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  TextFormField(
+                    controller: _codigoColaboradorLoteController,
+                    decoration: InputDecoration(
+                      hintText: 'Ej: 96',
+                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: Colors.white,
+                      isDense: true,
+                      prefixIcon: Icon(Icons.person, color: Colors.blue),
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          
+          Divider(height: 24),
+          
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('CODIGO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(producto['codigo'] ?? '', style: TextStyle(fontSize: 16)),
+                  ],
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('PRODUCTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(producto['nombre'] ?? '', style: TextStyle(fontSize: 16)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('UdM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(producto['unidad_medida_display'] ?? 'UN'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          SizedBox(height: 12),
+          
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('PLAN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(_tarea!['meta_produccion']?.toString() ?? '0'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('REAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    if (_modoEdicion)
+                      TextFormField(
+                        controller: _cantidadProducidaController,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      )
+                    else
+                      Text(_trazabilidad!['cantidad_producida']?.toString() ?? '0'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
-    final producto = tarea['producto'];
-    final linea = tarea['linea'];
-    final turno = tarea['turno'];
-    final fecha = tarea['fecha'];
-
-    // Si alguno es null o no es Map, no mostrar nada
-    if (producto == null || producto is! Map<String, dynamic> ||
-        linea == null || linea is! Map<String, dynamic> ||
-        turno == null || turno is! Map<String, dynamic>) {
-      return const SizedBox.shrink();
-    }
-
-    final juliano = _trazabilidad!['juliano'];
-    final lote = _trazabilidad!['lote'];
-
+  Widget _buildTablaColaboradores() {
+    final firmas = _trazabilidad!['firmas'] as List? ?? [];
+    final tieneFirmaSupervisor = firmas.any(
+      (f) => f is Map && f['tipo_firma'] == 'supervisor',
+    );
+    
     return Card(
-      margin: const EdgeInsets.all(16),
+      elevation: 4,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Información General',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).primaryColor,
-              ),
-            ),
-            const Divider(),
-            const SizedBox(height: 8),
-            
-            // ✅ USAR ?? '' para evitar nulls
-            _buildInfoRow('Producto', producto['nombre']?.toString() ?? 'N/A'),
-            _buildInfoRow('Código', producto['codigo']?.toString() ?? 'N/A'),
-
-            const SizedBox(height: 12),
-
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.indigo.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.indigo.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.qr_code_2, color: Colors.indigo, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'LOTE',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.indigo.shade700,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          lote?.toString() ?? 'Sin lote',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.indigo.shade900,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ], 
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(
-                  'Día Juliano: ',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    juliano?.toString() ?? 'N/A',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade900,
-                      fontFamily: 'monospace',
+                Row(
+                  children: [
+                    Text(
+                      'COLABORADORES',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
-                  ),
+                    SizedBox(width: 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _colaboradoresSeleccionados.length >= 20 
+                            ? Colors.red.shade100 
+                            : Colors.blue.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_colaboradoresSeleccionados.length}/20',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: _colaboradoresSeleccionados.length >= 20 
+                              ? Colors.red.shade900 
+                              : Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                if (_modoEdicion && !tieneFirmaSupervisor)
+                  IconButton(
+                    icon: Icon(Icons.person_add, color: Colors.blue),
+                    onPressed: _colaboradoresSeleccionados.length >= 20 
+                        ? null 
+                        : _agregarColaborador,
+                    tooltip: _colaboradoresSeleccionados.length >= 20 
+                        ? 'Límite alcanzado (20 max.)' 
+                        : 'Agregar',
+                  ),
               ],
             ),
-
-            const SizedBox(height: 12),
-            const Divider(),
-            const SizedBox(height: 8),
-
-            _buildInfoRow('Línea', linea['nombre']?.toString() ?? 'N/A'),
-            _buildInfoRow('Turno', turno['nombre']?.toString() ?? 'N/A'),
-            _buildInfoRow(
-              'Fecha', 
-              fecha != null 
-                  ? DateFormat('dd/MM/yyyy').format(DateTime.parse(fecha)) 
-                  : 'Sin fecha'
-            ),
+            Divider(),
+            
+            if (_colaboradoresSeleccionados.isEmpty)
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('No hay colaboradores asignados'),
+                ),
+              )
+            else
+              Table(
+                border: TableBorder.all(color: Colors.black, width: 1),
+                columnWidths: {
+                  0: FlexColumnWidth(1),
+                  1: FlexColumnWidth(2),
+                  if (_modoEdicion && !tieneFirmaSupervisor) 2: FixedColumnWidth(50),
+                },
+                children: [
+                  TableRow(
+                    decoration: BoxDecoration(color: Colors.grey.shade200),
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text('CODIGO', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text('NOMBRE', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      if (_modoEdicion && !tieneFirmaSupervisor)
+                        Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text('', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                    ],
+                  ),
+                  ..._colaboradoresSeleccionados.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final colab = entry.value;
+                    return TableRow(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text(colab['codigo'].toString()),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Text('${colab['nombre']} ${colab['apellido']}'),
+                        ),
+                        if (_modoEdicion && !tieneFirmaSupervisor)
+                          Padding(
+                            padding: EdgeInsets.all(4),
+                            child: IconButton(
+                              icon: Icon(Icons.delete, size: 18, color: Colors.red),
+                              onPressed: () => _eliminarColaborador(index),
+                              padding: EdgeInsets.zero,
+                              constraints: BoxConstraints(),
+                              tooltip: 'Eliminar',
+                            ),
+                          ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
           ],
         ),
       ),
     );
   }
 
-  // ========== UI: CANTIDAD PRODUCIDA Y OBSERVACIONES ==========
-  Widget _buildSeccionProduccion() {
+  Widget _buildTablaMateriales() {
     final firmas = _trazabilidad!['firmas'] as List? ?? [];
     final tieneFirmaSupervisor = firmas.any(
       (f) => f is Map && f['tipo_firma'] == 'supervisor',
     );
-
+    
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      elevation: 4,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -787,289 +1154,289 @@ class _DetalleTrazabilidadSupervisorScreenState
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Producción',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
-                  ),
+                  'MATERIALES',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                if (!tieneFirmaSupervisor)
+                if (_modoEdicion && !tieneFirmaSupervisor)
                   IconButton(
-                    icon: Icon(_modoEdicion ? Icons.close : Icons.edit),
-                    onPressed: () {
-                      if (_modoEdicion) {
-                        _cancelarEdicion();
-                      } else {
-                        setState(() {
-                          _modoEdicion = true;
-                        });
-                      }
-                    },
-                    tooltip: _modoEdicion ? 'Cancelar' : 'Editar',
+                    icon: Icon(Icons.add_box, color: Colors.green),
+                    onPressed: _agregarMateriaPrima,
+                    tooltip: 'Agregar Materia Prima',
                   ),
               ],
             ),
-            const Divider(),
-            const SizedBox(height: 8),
-
-            // Cantidad Producida
-            if (_modoEdicion)
-              TextFormField(
-                controller: _cantidadProducidaController,
-                decoration: const InputDecoration(
-                  labelText: 'Cantidad Producida',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.production_quantity_limits),
-                ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: false),
-              )
-            else
-              _buildInfoRow(
-                'Cantidad Producida',
-                '${_trazabilidad!['cantidad_producida']} unidades',
-              ),
-
-            const SizedBox(height: 16),
-
-            // Observaciones
-            if (_modoEdicion)
-              TextFormField(
-                controller: _observacionesController,
-                decoration: const InputDecoration(
-                  labelText: 'Observaciones',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.notes),
-                ),
-                maxLines: 3,
-              )
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Observaciones:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _trazabilidad!['observaciones'] ?? 'Sin observaciones',
-                    style: TextStyle(
-                      color: _trazabilidad!['observaciones'] != null
-                          ? Colors.black87
-                          : Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ========== UI: MATERIAS PRIMAS ==========
-  Widget _buildSeccionMateriasPrimas() {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Materias Primas Utilizadas',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).primaryColor,
-              ),
-            ),
-            const Divider(),
-            if (_materiasPrimasEditadas.isEmpty)
-              const Center(
+            Divider(),
+            
+            if (_materiasPrimasSeleccionadas.isEmpty)
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: EdgeInsets.all(24),
                   child: Text('No hay materias primas registradas'),
                 ),
               )
             else
-              ..._materiasPrimasEditadas.values.map((mp) {
-                return _buildMateriaPrimaItem(mp);
-              }),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Table(
+                  border: TableBorder.all(color: Colors.black, width: 1),
+                  defaultColumnWidth: IntrinsicColumnWidth(),
+                  children: [
+                    TableRow(
+                      decoration: BoxDecoration(color: Colors.grey.shade200),
+                      children: [
+                        if (_modoEdicion && !tieneFirmaSupervisor) _buildHeaderCell(''),
+                        _buildHeaderCell('CODIGO'),
+                        _buildHeaderCell('DESCRIPCION'),
+                        _buildHeaderCell('UdM'),
+                        _buildHeaderCell('LOTE'),
+                        _buildHeaderCell('CONSUMO'),
+                        _buildHeaderCell('REPROCESO'),
+                        _buildHeaderCell('MERMA'),
+                      ],
+                    ),
+                    ..._materiasPrimasSeleccionadas.map((codigo) {
+                      final mp = _datosMateriasPrimas[codigo]!;
+                      final tieneReproceso = _reprocesosData[codigo] != null;
+                      final tieneMerma = _mermasData[codigo] != null;
+                      
+                      return TableRow(
+                        children: [
+                          if (_modoEdicion && !tieneFirmaSupervisor)
+                            _buildDataCell(
+                              IconButton(
+                                icon: Icon(Icons.delete, size: 18, color: Colors.red),
+                                onPressed: () => _eliminarMateriaPrima(codigo),
+                                padding: EdgeInsets.zero,
+                                constraints: BoxConstraints(),
+                                tooltip: 'Eliminar',
+                              ),
+                            ),
+                          _buildDataCell(Text(codigo)),
+                          _buildDataCell(Text(mp['nombre'])),
+                          _buildDataCell(Text(mp['unidad_medida'])),
+                          _buildDataCell(
+                            SizedBox(
+                              width: 100,
+                              child: _modoEdicion && !tieneFirmaSupervisor
+                                  ? TextFormField(
+                                      controller: _loteControllers[codigo],
+                                      decoration: InputDecoration(
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                      ),
+                                      style: TextStyle(fontSize: 12),
+                                    )
+                                  : Text(_loteControllers[codigo]!.text),
+                            ),
+                          ),
+                          _buildDataCell(
+                            SizedBox(
+                              width: 80,
+                              child: _modoEdicion && !tieneFirmaSupervisor
+                                  ? TextFormField(
+                                      controller: _consumoControllers[codigo],
+                                      decoration: InputDecoration(
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                      ),
+                                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                      style: TextStyle(fontSize: 12),
+                                    )
+                                  : Text(_consumoControllers[codigo]!.text),
+                            ),
+                          ),
+                          _buildDataCell(
+                            _modoEdicion && !tieneFirmaSupervisor
+                                ? InkWell(
+                                    onTap: () => _ingresarReproceso(codigo, mp['nombre']),
+                                    child: Container(
+                                      width: 80,
+                                      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                      decoration: BoxDecoration(
+                                        color: tieneReproceso 
+                                            ? Colors.orange.shade50 
+                                            : Colors.transparent,
+                                        border: Border.all(
+                                          color: tieneReproceso 
+                                              ? Colors.orange 
+                                              : Colors.grey.shade300,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _reprocesoControllers[codigo]!.text,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: tieneReproceso 
+                                                    ? Colors.orange.shade900 
+                                                    : Colors.black87,
+                                                fontWeight: tieneReproceso 
+                                                    ? FontWeight.bold 
+                                                    : FontWeight.normal,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.edit,
+                                            size: 14,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : Text(_reprocesoControllers[codigo]!.text),
+                          ),
+                          _buildDataCell(
+                            _modoEdicion && !tieneFirmaSupervisor
+                                ? InkWell(
+                                    onTap: () => _ingresarMerma(codigo, mp['nombre']),
+                                    child: Container(
+                                      width: 80,
+                                      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                      decoration: BoxDecoration(
+                                        color: tieneMerma 
+                                            ? Colors.red.shade50 
+                                            : Colors.transparent,
+                                        border: Border.all(
+                                          color: tieneMerma 
+                                              ? Colors.red 
+                                              : Colors.grey.shade300,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _mermaControllers[codigo]!.text,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: tieneMerma 
+                                                    ? Colors.red.shade900 
+                                                    : Colors.black87,
+                                                fontWeight: tieneMerma 
+                                                    ? FontWeight.bold 
+                                                    : FontWeight.normal,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.edit,
+                                            size: 14,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : Text(_mermaControllers[codigo]!.text),
+                          ),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMateriaPrimaItem(Map<String, dynamic> mp) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-        color: _modoEdicion ? Colors.blue.shade50 : Colors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            mp['nombre'],
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 8),
-          
-          // Lote
-          if (mp['requiere_lote']) ...[
-            if (_modoEdicion)
-              TextFormField(
-                initialValue: mp['lote'],
-                decoration: const InputDecoration(
-                  labelText: 'Lote',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                onChanged: (value) {
-                  mp['lote'] = value;
-                },
-              )
-            else
-              Text('Lote: ${mp['lote']}'),
-            const SizedBox(height: 8),
-          ],
-          
-          // Cantidad
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: _modoEdicion
-                    ? TextFormField(
-                        initialValue: mp['cantidad_usada'].toString(),
-                        decoration: const InputDecoration(
-                          labelText: 'Cantidad',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        onChanged: (value) {
-                          mp['cantidad_usada'] = value;
-                        },
-                      )
-                    : Text('Cantidad: ${mp['cantidad_usada']} ${mp['unidad_medida']}'),
-              ),
-              if (_modoEdicion) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 2,
-                  child: DropdownButtonFormField<String>(
-                    value: mp['unidad_medida'],
-                    decoration: const InputDecoration(
-                      labelText: 'Unidad',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'kg', child: Text('kg')),
-                      DropdownMenuItem(value: 'unidades', child: Text('unidades')),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        mp['unidad_medida'] = value!;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+  Widget _buildHeaderCell(String text) {
+    return Padding(
+      padding: EdgeInsets.all(8),
+      child: Text(
+        text,
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        textAlign: TextAlign.center,
       ),
     );
   }
-  // UI de seleccionar foto de etiquetas
-  Widget _buildFotoEtiquetas() {
-    // Determinar si hay foto (nueva o existente)
+
+  Widget _buildDataCell(Widget child) {
+    return Padding(
+      padding: EdgeInsets.all(8),
+      child: child,
+    );
+  }
+
+  Widget _buildSeccionFoto() {
+    final firmas = _trazabilidad!['firmas'] as List? ?? [];
+    final tieneFirmaSupervisor = firmas.any(
+      (f) => f is Map && f['tipo_firma'] == 'supervisor',
+    );
+    
     final bool hayFoto = _fotoEtiqueta != null || _fotoEtiquetasUrl != null;
     
     return Card(
+      elevation: 4,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'FOTO DE ETIQUETAS *',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                letterSpacing: 1,
-              ),
+              'FOTO DE ETIQUETAS',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+            Divider(),
             
             if (!hayFoto)
-              // NO HAY FOTO: Mostrar botones para agregar
               Column(
                 children: [
-                  Text(
-                    'Debes tomar una foto de las etiquetas utilizadas',
-                    style: TextStyle(color: Colors.grey[600]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _tomarFoto,
-                          icon: Icon(Icons.camera_alt),
-                          label: Text('Tomar Foto'),
+                  Text('Debes tomar una foto de las etiquetas utilizadas'),
+                  SizedBox(height: 16),
+                  if (_modoEdicion && !tieneFirmaSupervisor)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _tomarFoto,
+                            icon: Icon(Icons.camera_alt),
+                            label: Text('Tomar Foto'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _seleccionarFotoGaleria,
-                          icon: Icon(Icons.photo_library),
-                          label: Text('Galería'),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _seleccionarFotoGaleria,
+                            icon: Icon(Icons.photo_library),
+                            label: Text('Galería'),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                 ],
               )
             else
-              // HAY FOTO: Mostrar preview
               Column(
                 children: [
-                  // Preview de la imagen
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: _fotoEtiqueta != null
                         ? Image.memory(
                             _fotoEtiqueta!,
-                            height: 200,
+                            height: 400,
                             width: double.infinity,
                             fit: BoxFit.cover,
                           )
                         : Image.network(
                             _fotoEtiquetasUrl!,
-                            height: 200,
+                            height: 400,
                             width: double.infinity,
                             fit: BoxFit.cover,
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
                               return Container(
-                                height: 200,
+                                height: 400,
                                 child: Center(
                                   child: CircularProgressIndicator(
                                     value: loadingProgress.expectedTotalBytes != null
@@ -1082,7 +1449,7 @@ class _DetalleTrazabilidadSupervisorScreenState
                             },
                             errorBuilder: (context, error, stackTrace) {
                               return Container(
-                                height: 200,
+                                height: 400,
                                 color: Colors.grey[300],
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1099,10 +1466,9 @@ class _DetalleTrazabilidadSupervisorScreenState
                             },
                           ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   
-                  // Botones de acción (solo en modo edición)
-                  if (_modoEdicion)
+                  if (_modoEdicion && !tieneFirmaSupervisor)
                     Row(
                       children: [
                         Expanded(
@@ -1112,7 +1478,7 @@ class _DetalleTrazabilidadSupervisorScreenState
                             label: Text('Cambiar Foto'),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8),
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () {
@@ -1131,7 +1497,6 @@ class _DetalleTrazabilidadSupervisorScreenState
                       ],
                     )
                   else
-                    // Vista de solo lectura
                     Container(
                       padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -1161,258 +1526,51 @@ class _DetalleTrazabilidadSupervisorScreenState
     );
   }
 
-  // ========== UI: COLABORADORES ==========
-  Widget _buildSeccionColaboradores() {
+  Widget _buildObservaciones() {
+    final firmas = _trazabilidad!['firmas'] as List? ?? [];
+    final tieneFirmaSupervisor = firmas.any(
+      (f) => f is Map && f['tipo_firma'] == 'supervisor',
+    );
+    
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 4,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Colaboradores (${_colaboradoresSeleccionados.length})',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                ),
-                if (_modoEdicion)
-                  IconButton(
-                    icon: const Icon(Icons.person_add),
-                    onPressed: _agregarColaborador,
-                    tooltip: 'Agregar',
-                  ),
-              ],
+            Text(
+              'OBSERVACIONES',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            const Divider(),
-            if (_colaboradoresSeleccionados.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No hay colaboradores asignados'),
+            Divider(),
+            
+            if (_modoEdicion && !tieneFirmaSupervisor)
+              TextFormField(
+                controller: _observacionesController,
+                decoration: InputDecoration(
+                  hintText: 'Observaciones adicionales...',
+                  border: OutlineInputBorder(),
                 ),
+                maxLines: 3,
+                maxLength: 500,
               )
             else
-              ..._colaboradoresSeleccionados.asMap().entries.map((entry) {
-                final index = entry.key;
-                final colab = entry.value;
-                final nombreCompleto = '${colab['nombre']} ${colab['apellido']}';
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                    color: _modoEdicion ? Colors.indigo.shade50 : Colors.white,
-                  ),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.indigo,
-                      child: Text(
-                        colab['nombre'].toString()[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    title: Text(
-                      nombreCompleto,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text('Código: ${colab['codigo']}'),
-                    trailing: _modoEdicion
-                        ? IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => _eliminarColaborador(index),
-                          )
-                        : null,
-                  ),
-                );
-              }),
+              Text(
+                _trazabilidad!['observaciones'] ?? 'Sin observaciones',
+                style: TextStyle(
+                  color: _trazabilidad!['observaciones'] != null
+                      ? Colors.black87
+                      : Colors.grey,
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  // ========== UI: REPROCESOS ==========
-  Widget _buildSeccionReprocesos() {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.loop, color: Colors.orange),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Reprocesos (${_reprocesosEditados.length})',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange[700],
-                    ),
-                  ),
-                ),
-                if (_modoEdicion)
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: _agregarReproceso,
-                    tooltip: 'Agregar',
-                  ),
-              ],
-            ),
-            const Divider(),
-            if (_reprocesosEditados.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No hay reprocesos registrados'),
-                ),
-              )
-            else
-              ..._reprocesosEditados.asMap().entries.map((entry) {
-                final index = entry.key;
-                final reproceso = entry.value;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${reproceso['cantidad_kg']} kg',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              reproceso['descripcion'] ?? 'Sin descripción',
-                              style: TextStyle(color: Colors.grey[700]),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_modoEdicion)
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _eliminarReproceso(index),
-                        ),
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ========== UI: MERMAS ==========
-  Widget _buildSeccionMermas() {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.delete_outline, color: Colors.red),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Mermas (${_mermasEditadas.length})',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red[700],
-                    ),
-                  ),
-                ),
-                if (_modoEdicion)
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: _agregarMerma,
-                    tooltip: 'Agregar',
-                  ),
-              ],
-            ),
-            const Divider(),
-            if (_mermasEditadas.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No hay mermas registradas'),
-                ),
-              )
-            else
-              ..._mermasEditadas.asMap().entries.map((entry) {
-                final index = entry.key;
-                final merma = entry.value;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${merma['cantidad_kg']} kg',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              merma['descripcion'] ?? 'Sin descripción',
-                              style: TextStyle(color: Colors.grey[700]),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_modoEdicion)
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _eliminarMerma(index),
-                        ),
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ========== UI: FIRMAS ==========
   Widget _buildSeccionFirmas() {
     final firmas = _trazabilidad!['firmas'] as List? ?? [];
     final tieneFirmaSupervisor = firmas.any(
@@ -1420,24 +1578,21 @@ class _DetalleTrazabilidadSupervisorScreenState
     );
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 4,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Firmas',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).primaryColor,
-              ),
+              'FIRMAS',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const Divider(),
+            Divider(),
 
             if (firmas.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Center(
                   child: Text(
@@ -1448,14 +1603,12 @@ class _DetalleTrazabilidadSupervisorScreenState
               )
             else
               ...firmas.map((firma) {
-                // ✅ VALIDACIÓN: Verificar que firma sea un Map válido
                 if (firma == null || firma is! Map<String, dynamic>) {
-                  return const SizedBox.shrink();
+                  return SizedBox.shrink();
                 }
 
                 final esSupervisor = firma['tipo_firma'] == 'supervisor';
                 
-                // ✅ OBTENER VALORES CON DEFAULTS SEGUROS
                 String usuarioNombre = 'Usuario desconocido';
                 if (firma['usuario_detalle'] != null && firma['usuario_detalle'] is Map) {
                   final usuarioDetalle = firma['usuario_detalle'] as Map;
@@ -1467,7 +1620,6 @@ class _DetalleTrazabilidadSupervisorScreenState
                 }
                 final fechaFirma = firma['fecha_firma'];
                 
-                // ✅ Formatear fecha de forma segura
                 String fechaFormateada = 'Fecha no disponible';
                 if (fechaFirma != null) {
                   try {
@@ -1479,8 +1631,8 @@ class _DetalleTrazabilidadSupervisorScreenState
                 }
 
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
+                  margin: EdgeInsets.only(bottom: 12),
+                  padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: esSupervisor ? Colors.green[50] : Colors.blue[50],
                     borderRadius: BorderRadius.circular(8),
@@ -1494,7 +1646,7 @@ class _DetalleTrazabilidadSupervisorScreenState
                         Icons.verified,
                         color: esSupervisor ? Colors.green : Colors.blue,
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1508,7 +1660,7 @@ class _DetalleTrazabilidadSupervisorScreenState
                             ),
                             Text(
                               usuarioNombre,
-                              style: const TextStyle(fontSize: 12),
+                              style: TextStyle(fontSize: 12),
                             ),
                             Text(
                               fechaFormateada,
@@ -1522,16 +1674,15 @@ class _DetalleTrazabilidadSupervisorScreenState
                 );
               }),
 
-            // Botón de firma o guardar cambios
             if (!tieneFirmaSupervisor) ...[
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               if (_modoEdicion)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _isSaving ? null : _guardarCambios,
                     icon: _isSaving
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(
@@ -1539,11 +1690,11 @@ class _DetalleTrazabilidadSupervisorScreenState
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.save),
+                        : Icon(Icons.save),
                     label: Text(_isSaving ? 'Guardando...' : 'Guardar Cambios'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                     ),
                   ),
                 )
@@ -1553,7 +1704,7 @@ class _DetalleTrazabilidadSupervisorScreenState
                   child: ElevatedButton.icon(
                     onPressed: _isSaving ? null : _firmarTrazabilidad,
                     icon: _isSaving
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(
@@ -1561,15 +1712,15 @@ class _DetalleTrazabilidadSupervisorScreenState
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.edit_note),
+                        : Icon(Icons.edit_note),
                     label: Text(_isSaving ? 'Firmando...' : 'Firmar Trazabilidad'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                     ),
                   ),
                 ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text(
                 _modoEdicion 
                     ? 'Los cambios no se guardarán hasta que presiones "Guardar Cambios".'
@@ -1588,79 +1739,72 @@ class _DetalleTrazabilidadSupervisorScreenState
     );
   }
 
-  // ========== HELPER: FILA DE INFORMACIÓN ==========
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[700],
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.black87),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ========== BUILD PRINCIPAL ==========
   @override
   Widget build(BuildContext context) {
-  // ========== CAPTURAR CUALQUIER ERROR ==========
-  try {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Error')),
         body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _cargarTrazabilidad,
-                  child: const Text('Reintentar'),
-                ),
-              ],
-            ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Cargando trazabilidad...'),
+            ],
           ),
         ),
       );
     }
 
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: Text('Error')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.red),
+              SizedBox(height: 16),
+              Text('Error al cargar'),
+              SizedBox(height: 8),
+              Text(_error!, textAlign: TextAlign.center),
+              SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _cargarTrazabilidad,
+                child: Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final firmas = _trazabilidad!['firmas'] as List? ?? [];
+    final tieneFirmaSupervisor = firmas.any(
+      (f) => f is Map && f['tipo_firma'] == 'supervisor',
+    );
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detalle de Trazabilidad'),
+        title: Text('Detalle de Trazabilidad'),
         actions: [
+          if (!tieneFirmaSupervisor)
+            IconButton(
+              icon: Icon(_modoEdicion ? Icons.close : Icons.edit),
+              onPressed: () {
+                if (_modoEdicion) {
+                  _cancelarEdicion();
+                } else {
+                  setState(() {
+                    _modoEdicion = true;
+                  });
+                }
+              },
+              tooltip: _modoEdicion ? 'Cancelar edición' : 'Editar',
+            ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh),
             onPressed: _cargarTrazabilidad,
             tooltip: 'Actualizar',
           ),
@@ -1669,226 +1813,24 @@ class _DetalleTrazabilidadSupervisorScreenState
       body: RefreshIndicator(
         onRefresh: _cargarTrazabilidad,
         child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
+          physics: AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ✅ CADA SECCIÓN CON SU PROPIO TRY-CATCH
-              _buildSeccionTareaSegura(),
-              _buildSeccionProduccionSegura(),
-              _buildSeccionMateriasPrimasSegura(),
-              _buildSeccionColaboradoresSegura(),
-              _buildSeccionReprocesosSegura(),
-              _buildSeccionMermasSegura(),
-              _buildFotoEtiquetasSegura(),
-              _buildSeccionFirmasSegura(),
-              const SizedBox(height: 32),
+              _buildEncabezado(),
+              _buildTablaColaboradores(),
+              _buildTablaMateriales(),
+              _buildSeccionFoto(),
+              _buildObservaciones(),
+              _buildSeccionFirmas(),
+              SizedBox(height: 32),
             ],
           ),
         ),
       ),
     );
-  } catch (e, stackTrace) {
-    // ✅ SI HAY CUALQUIER ERROR EN EL BUILD, MOSTRARLO AQUÍ
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('❌ ERROR CRÍTICO'),
-        backgroundColor: Colors.red,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: Colors.red.shade50,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '🔥 ERROR DETECTADO:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    '$e',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '📍 STACK TRACE:',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.grey.shade100,
-              child: SelectableText(
-                '$stackTrace',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Volver'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
-
-
-  Widget _buildSeccionTareaSegura() {
-    try {
-      return _buildSeccionTarea();
-    } catch (e) {
-      return Card(
-        margin: const EdgeInsets.all(16),
-        color: Colors.red.shade50,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('❌ Error en sección Tarea: $e'),
-        ),
-      );
-    }
-  }
-
-  Widget _buildSeccionProduccionSegura() {
-    try {
-      return _buildSeccionProduccion();
-    } catch (e) {
-      return Card(
-        margin: const EdgeInsets.all(16),
-        color: Colors.red.shade50,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('❌ Error en sección Producción: $e'),
-        ),
-      );
-    }
-  }
-
-  Widget _buildSeccionMateriasPrimasSegura() {
-    try {
-      return _buildSeccionMateriasPrimas();
-    } catch (e) {
-      return Card(
-        margin: const EdgeInsets.all(16),
-        color: Colors.red.shade50,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('❌ Error en sección Materias Primas: $e'),
-        ),
-      );
-    }
-  }
-
-  Widget _buildSeccionColaboradoresSegura() {
-    try {
-      return _buildSeccionColaboradores();
-    } catch (e) {
-      return Card(
-        margin: const EdgeInsets.all(16),
-        color: Colors.red.shade50,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('❌ Error en sección Colaboradores: $e'),
-        ),
-      );
-    }
-  }
-
-  Widget _buildSeccionReprocesosSegura() {
-    try {
-      return _buildSeccionReprocesos();
-    } catch (e) {
-      return Card(
-        margin: const EdgeInsets.all(16),
-        color: Colors.red.shade50,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('❌ Error en sección Reprocesos: $e'),
-        ),
-      );
-    }
-  }
-
-  Widget _buildSeccionMermasSegura() {
-    try {
-      return _buildSeccionMermas();
-    } catch (e) {
-      return Card(
-        margin: const EdgeInsets.all(16),
-        color: Colors.red.shade50,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('❌ Error en sección Mermas: $e'),
-        ),
-      );
-    }
-  }
-
-  Widget _buildFotoEtiquetasSegura() {
-    try {
-      return _buildFotoEtiquetas();
-    } catch (e) {
-      return Card(
-        margin: const EdgeInsets.all(16),
-        color: Colors.red.shade50,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('❌ Error en sección Foto: $e'),
-        ),
-      );
-    }
-  }
-
-  Widget _buildSeccionFirmasSegura() {
-    try {
-      return _buildSeccionFirmas();
-    } catch (e) {
-      return Card(
-        margin: const EdgeInsets.all(16),
-        color: Colors.red.shade50,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('❌ Error en sección Firmas: $e'),
-        ),
-      );
-    }
-  }
-}
-
-// ============================================================================
-// DIÁLOGOS (sin cambios)
-// ============================================================================
 
 class _DialogSeleccionarColaborador extends StatefulWidget {
   final List<Map<String, dynamic>> colaboradores;
@@ -1940,7 +1882,7 @@ class _DialogSeleccionarColaboradorState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Row(
+      title: Row(
         children: [
           Icon(Icons.person_add, color: Colors.blue),
           SizedBox(width: 8),
@@ -1956,10 +1898,10 @@ class _DialogSeleccionarColaboradorState
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Buscar por código o nombre...',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear),
+                        icon: Icon(Icons.clear),
                         onPressed: () => _searchController.clear(),
                       )
                     : null,
@@ -1968,11 +1910,11 @@ class _DialogSeleccionarColaboradorState
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             
             Expanded(
               child: _colaboradoresFiltrados.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text('No se encontraron colaboradores'),
                     )
                   : ListView.builder(
@@ -1983,13 +1925,13 @@ class _DialogSeleccionarColaboradorState
                             '${colab['nombre']} ${colab['apellido']}';
                         
                         return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
+                          margin: EdgeInsets.only(bottom: 8),
                           child: ListTile(
                             leading: CircleAvatar(
                               backgroundColor: Colors.indigo,
                               child: Text(
                                 colab['nombre'].toString()[0].toUpperCase(),
-                                style: const TextStyle(color: Colors.white),
+                                style: TextStyle(color: Colors.white),
                               ),
                             ),
                             title: Text(nombreCompleto),
@@ -2006,285 +1948,566 @@ class _DialogSeleccionarColaboradorState
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text('Cancelar'),
         ),
       ],
     );
   }
 }
 
-class _DialogReproceso extends StatefulWidget {
-  const _DialogReproceso();
+class _DialogSeleccionarMateriaPrima extends StatefulWidget {
+  final List<Map<String, dynamic>> materiasPrimas;
+
+  const _DialogSeleccionarMateriaPrima({
+    required this.materiasPrimas,
+  });
 
   @override
-  State<_DialogReproceso> createState() => _DialogReprocesoState();
+  State<_DialogSeleccionarMateriaPrima> createState() => 
+      _DialogSeleccionarMateriaPrimaState();
 }
 
-class _DialogReprocesoState extends State<_DialogReproceso> {
-  final _cantidadController = TextEditingController();
-  final _otroController = TextEditingController();
-  final List<String> _causasDisponibles = [
-    'Producto fuera de especificación',
-    'Error en proceso',
-    'Problema de temperatura',
-    'Contaminación cruzada',
-    'Devolución de cliente',
-    'Exceso de producción',
-    'Otros',
-  ];
-  final Set<String> _causasSeleccionadas = {};
+class _DialogSeleccionarMateriaPrimaState 
+    extends State<_DialogSeleccionarMateriaPrima> {
+  
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _materiasFiltradas = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _materiasFiltradas = widget.materiasPrimas;
+    _searchController.addListener(_filtrarMaterias);
+  }
 
   @override
   void dispose() {
-    _cantidadController.dispose();
-    _otroController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _filtrarMaterias() {
+    final query = _searchController.text.toLowerCase();
+    
+    setState(() {
+      if (query.isEmpty) {
+        _materiasFiltradas = widget.materiasPrimas;
+      } else {
+        _materiasFiltradas = widget.materiasPrimas.where((mp) {
+          final codigo = mp['codigo'].toString().toLowerCase();
+          final nombre = mp['nombre'].toString().toLowerCase();
+          
+          return codigo.contains(query) || nombre.contains(query);
+        }).toList();
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool otrosSeleccionado = _causasSeleccionadas.contains('Otros');
-    
     return AlertDialog(
-      title: const Text('Agregar Reproceso'),
-      content: SingleChildScrollView(
+      title: Row(
+        children: [
+          Icon(Icons.add_box, color: Colors.green),
+          SizedBox(width: 8),
+          Text('Agregar Materia Prima'),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(
-              controller: _cantidadController,
-              decoration: const InputDecoration(
-                labelText: 'Cantidad (kg)',
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar por código o nombre...',
+                prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Causas del reproceso:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            SizedBox(height: 16),
+            
+            Expanded(
+              child: _materiasFiltradas.isEmpty
+                  ? Center(child: Text('No se encontraron materias primas'))
+                  : ListView.builder(
+                      itemCount: _materiasFiltradas.length,
+                      itemBuilder: (context, index) {
+                        final mp = _materiasFiltradas[index];
+                        return Card(
+                          child: ListTile(
+                            leading: Icon(Icons.inventory_2, color: Colors.blue),
+                            title: Text(mp['nombre']),
+                            subtitle: Text('${mp['codigo']} - ${mp['unidad_medida']}'),
+                            trailing: Icon(Icons.add_circle, color: Colors.green),
+                            onTap: () => Navigator.pop(context, mp),
+                          ),
+                        );
+                      },
+                    ),
             ),
-            const SizedBox(height: 8),
-            ..._causasDisponibles.map((causa) => CheckboxListTile(
-              title: Text(causa),
-              value: _causasSeleccionadas.contains(causa),
-              onChanged: (value) {
-                setState(() {
-                  if (value == true) {
-                    _causasSeleccionadas.add(causa);
-                  } else {
-                    _causasSeleccionadas.remove(causa);
-                    // Si deselecciona "Otros", limpiar el campo
-                    if (causa == 'Otros') {
-                      _otroController.clear();
-                    }
-                  }
-                });
-              },
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-            )),
-            // Campo de texto que aparece solo si "Otros" está seleccionado
-            if (otrosSeleccionado) ...[
-              const SizedBox(height: 16),
-              TextField(
-                controller: _otroController,
-                decoration: const InputDecoration(
-                  labelText: 'Especifique otra causa',
-                  border: OutlineInputBorder(),
-                  hintText: 'Describa la causa',
-                ),
-                maxLines: 2,
-              ),
-            ],
           ],
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            final cantidad = double.tryParse(_cantidadController.text);
-            if (cantidad == null || cantidad <= 0) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Ingrese una cantidad válida')),
-              );
-              return;
-            }
-            
-            if (_causasSeleccionadas.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Seleccione al menos una causa')),
-              );
-              return;
-            }
-
-            // Validar que si seleccionó "Otros", haya escrito algo
-            if (otrosSeleccionado && _otroController.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Especifique la otra causa')),
-              );
-              return;
-            }
-
-            // Construir la descripción
-            final causas = _causasSeleccionadas.toList();
-            
-            // Si "Otros" está seleccionado, reemplazarlo con el texto ingresado
-            if (otrosSeleccionado) {
-              causas.remove('Otros');
-              causas.add('Otros: ${_otroController.text.trim()}');
-            }
-            
-            Navigator.pop(context, {
-              'cantidad_kg': cantidad,
-              'descripcion': causas.join(', '),
-            });
-          },
-          child: const Text('Agregar'),
+          child: Text('Cancelar'),
         ),
       ],
     );
   }
 }
 
-class _DialogMerma extends StatefulWidget {
-  const _DialogMerma();
+class _DialogIngresarReproceso extends StatefulWidget {
+  final String nombreMateriaPrima;
+  final String? cantidadInicial;
+  final String? causaInicial;
+  final String unidadMedida;
+
+  const _DialogIngresarReproceso({
+    required this.nombreMateriaPrima,
+    required this.unidadMedida,
+    this.cantidadInicial,
+    this.causaInicial,
+  });
 
   @override
-  State<_DialogMerma> createState() => _DialogMermaState();
+  State<_DialogIngresarReproceso> createState() => _DialogIngresarReprocesoState();
 }
 
-class _DialogMermaState extends State<_DialogMerma> {
+class _DialogIngresarReprocesoState extends State<_DialogIngresarReproceso> {
   final _cantidadController = TextEditingController();
-  final _otroController = TextEditingController();
-  final List<String> _causasDisponibles = [
-    'Desperdicio de proceso',
-    'Producto no conforme',
-    'Limpieza de equipos',
-    'Calibración de máquinas',
-    'Cambio de formato',
-    'Residuos de producción',
-    'Otros',
+  final _otraCausaController = TextEditingController();
+  String _causaSeleccionada = 'escasez_de_banado';
+  
+  final List<Map<String, String>> _causasReproceso = [
+    {'value': 'escasez_de_banado', 'label': 'Escasez de Bañado'},
+    {'value': 'poca_vida_util', 'label': 'Poca Vida Útil'},
+    {'value': 'deformacion', 'label': 'Deformación'},
+    {'value': 'peso_erroneo', 'label': 'Peso Erróneo'},
+    {'value': 'mal_templado', 'label': 'Mal Templado'},
+    {'value': 'otro', 'label': 'Otro'},
   ];
-  final Set<String> _causasSeleccionadas = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _cantidadController.text = widget.cantidadInicial ?? '0';
+    _causaSeleccionada = widget.causaInicial ?? 'escasez_de_banado';
+
+    if (_causaSeleccionada.startsWith('otro:')) {
+      final partes = _causaSeleccionada.split(':');
+      if (partes.length > 1) {
+        _causaSeleccionada = 'otro';
+        _otraCausaController.text = partes.sublist(1).join(':');
+      }
+    }
+  }
 
   @override
   void dispose() {
     _cantidadController.dispose();
-    _otroController.dispose();
+    _otraCausaController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool otrosSeleccionado = _causasSeleccionadas.contains('Otros');
-    
     return AlertDialog(
-      title: const Text('Agregar Merma'),
+      title: Row(
+        children: [
+          Icon(Icons.recycling, color: Colors.orange),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Reproceso',
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _cantidadController,
-              decoration: const InputDecoration(
-                labelText: 'Cantidad (kg)',
-                border: OutlineInputBorder(),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              child: Row(
+                children: [
+                  Icon(Icons.inventory_2, color: Colors.orange.shade700, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.nombreMateriaPrima,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Causas de la merma:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            
+            SizedBox(height: 20),
+            
+            Text(
+              'Cantidad de Reproceso',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
-            const SizedBox(height: 8),
-            ..._causasDisponibles.map((causa) => CheckboxListTile(
-              title: Text(causa),
-              value: _causasSeleccionadas.contains(causa),
+            SizedBox(height: 8),
+            TextFormField(
+              controller: _cantidadController,
+              decoration: InputDecoration(
+                hintText: 'Ej: 5.5',
+                suffixText: widget.unidadMedida,
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.scale),
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+              ],
+            ),
+            
+            SizedBox(height: 20),
+            
+            Text(
+              'Causa del Reproceso',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _causaSeleccionada,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.warning_amber),
+              ),
+              items: _causasReproceso.map((causa) {
+                return DropdownMenuItem<String>(
+                  value: causa['value'],
+                  child: Text(causa['label']!),
+                );
+              }).toList(),
               onChanged: (value) {
                 setState(() {
-                  if (value == true) {
-                    _causasSeleccionadas.add(causa);
-                  } else {
-                    _causasSeleccionadas.remove(causa);
-                    // Si deselecciona "Otros", limpiar el campo
-                    if (causa == 'Otros') {
-                      _otroController.clear();
-                    }
-                  }
+                  _causaSeleccionada = value!;
                 });
               },
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-            )),
-            // Campo de texto que aparece solo si "Otros" está seleccionado
-            if (otrosSeleccionado) ...[
-              const SizedBox(height: 16),
-              TextField(
-                controller: _otroController,
-                decoration: const InputDecoration(
-                  labelText: 'Especifique otra causa',
+            ),
+
+            if (_causaSeleccionada == 'otro') ...[
+              SizedBox(height: 12),
+              Text(
+                'Especifica la otra causa',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              SizedBox(height: 8),
+              TextFormField(
+                controller: _otraCausaController,
+                decoration: InputDecoration(
+                  hintText: 'Escribe la causa...',
                   border: OutlineInputBorder(),
-                  hintText: 'Describa la causa',
+                  prefixIcon: Icon(Icons.edit),
                 ),
+                maxLength: 200,
                 maxLines: 2,
               ),
             ],
+            
+            SizedBox(height: 12),
+            
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: Colors.blue.shade700),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ingresa 0 para eliminar el reproceso',
+                      style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text('Cancelar'),
         ),
-        ElevatedButton(
+        ElevatedButton.icon(
           onPressed: () {
-            final cantidad = double.tryParse(_cantidadController.text);
-            if (cantidad == null || cantidad <= 0) {
+            final cantidad = double.tryParse(_cantidadController.text.trim()) ?? 0.0;
+
+            if (_causaSeleccionada == 'otro' && _otraCausaController.text.trim().isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Ingrese una cantidad válida')),
+                SnackBar(
+                  content: Text('Por favor especifica la otra causa'),
+                  backgroundColor: Colors.red,
+                ),
               );
               return;
             }
             
-            if (_causasSeleccionadas.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Seleccione al menos una causa')),
-              );
-              return;
-            }
-
-            // Validar que si seleccionó "Otros", haya escrito algo
-            if (otrosSeleccionado && _otroController.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Especifique la otra causa')),
-              );
-              return;
-            }
-
-            // Construir la descripción
-            final causas = _causasSeleccionadas.toList();
-            
-            // Si "Otros" está seleccionado, reemplazarlo con el texto ingresado
-            if (otrosSeleccionado) {
-              causas.remove('Otros');
-              causas.add('Otros: ${_otroController.text.trim()}');
+            String causaFinal = _causaSeleccionada;
+            if (_causaSeleccionada == 'otro') {
+              causaFinal = 'otro:${_otraCausaController.text.trim()}';
             }
             
             Navigator.pop(context, {
-              'cantidad_kg': cantidad,
-              'descripcion': causas.join(', '),
+              'cantidad': cantidad,
+              'causas': causaFinal,
             });
           },
-          child: const Text('Agregar'),
+          icon: Icon(Icons.check),
+          label: Text('Guardar'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogIngresarMerma extends StatefulWidget {
+  final String nombreMateriaPrima;
+  final String? cantidadInicial;
+  final String? causaInicial;
+  final String unidadMedida;
+
+  const _DialogIngresarMerma({
+    required this.nombreMateriaPrima,
+    required this.unidadMedida,
+    this.cantidadInicial,
+    this.causaInicial,
+  });
+
+  @override
+  State<_DialogIngresarMerma> createState() => _DialogIngresarMermaState();
+}
+
+class _DialogIngresarMermaState extends State<_DialogIngresarMerma> {
+  final _cantidadController = TextEditingController();
+  final _otraCausaController = TextEditingController();
+  String _causaSeleccionada = 'cayo_al_suelo';
+  
+  final List<Map<String, String>> _causasMerma = [
+    {'value': 'cayo_al_suelo', 'label': 'Cayó al Suelo'},
+    {'value': 'por_hongos', 'label': 'Por Hongos'},
+    {'value': 'caducidad', 'label': 'Caducidad'},
+    {'value': 'grasa_maquina', 'label': 'Grasa Máquina'},
+    {'value': 'exposicion', 'label': 'Exposición'},
+    {'value': 'otro', 'label': 'Otro'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _cantidadController.text = widget.cantidadInicial ?? '0';
+    _causaSeleccionada = widget.causaInicial ?? 'cayo_al_suelo';
+
+    if (_causaSeleccionada.startsWith('otro:')) {
+      final partes = _causaSeleccionada.split(':');
+      if (partes.length > 1) {
+        _causaSeleccionada = 'otro';
+        _otraCausaController.text = partes.sublist(1).join(':');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _cantidadController.dispose();
+    _otraCausaController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.delete_outline, color: Colors.red),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Merma',
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.inventory_2, color: Colors.red.shade700, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.nombreMateriaPrima,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            SizedBox(height: 20),
+            
+            Text(
+              'Cantidad de Merma',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            TextFormField(
+              controller: _cantidadController,
+              decoration: InputDecoration(
+                hintText: 'Ej: 2.3',
+                suffixText: widget.unidadMedida,
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.scale),
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+              ],
+            ),
+            
+            SizedBox(height: 20),
+            
+            Text(
+              'Causa de la Merma',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _causaSeleccionada,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.warning_amber),
+              ),
+              items: _causasMerma.map((causa) {
+                return DropdownMenuItem<String>(
+                  value: causa['value'],
+                  child: Text(causa['label']!),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _causaSeleccionada = value!;
+                });
+              },
+            ),
+
+            if (_causaSeleccionada == 'otro') ...[
+              SizedBox(height: 12),
+              Text(
+                'Especifica la otra causa',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              SizedBox(height: 8),
+              TextFormField(
+                controller: _otraCausaController,
+                decoration: InputDecoration(
+                  hintText: 'Escribe la causa...',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.edit),
+                ),
+                maxLength: 200,
+                maxLines: 2,
+              ),
+            ],
+            
+            SizedBox(height: 12),
+            
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: Colors.blue.shade700),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ingresa 0 para eliminar la merma',
+                      style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancelar'),
+        ),
+        ElevatedButton.icon(
+          onPressed: () {
+            final cantidad = double.tryParse(_cantidadController.text.trim()) ?? 0.0;
+
+            if (_causaSeleccionada == 'otro' && _otraCausaController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Por favor especifica la otra causa'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            String causaFinal = _causaSeleccionada;
+            if (_causaSeleccionada == 'otro') {
+              causaFinal = 'otro:${_otraCausaController.text.trim()}';
+            }
+            
+            Navigator.pop(context, {
+              'cantidad': cantidad,
+              'causas': causaFinal,
+            });
+          },
+          icon: Icon(Icons.check),
+          label: Text('Guardar'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+          ),
         ),
       ],
     );

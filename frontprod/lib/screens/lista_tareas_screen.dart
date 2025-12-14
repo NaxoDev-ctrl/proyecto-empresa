@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontprod/models/producto.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
@@ -126,7 +127,6 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
     );
 
     if (picked != null && picked != _selectedDate) {
-      // Guardar en provider
       final filtroProvider = Provider.of<FiltroProvider>(context, listen: false);
       await filtroProvider.setSelectedDate(picked);
       
@@ -151,13 +151,12 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
   }
 
   ({Color base, Color borderTurno, Color textTurno, Color textProducto}) _getTurnoSkin(String turnoCodigo) {
-    // Si el código de turno no existe, usamos AM como valor predeterminado seguro
     return _turnoSkin[turnoCodigo] ?? _turnoSkin['AM']!;
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Necesario para AutomaticKeepAliveClientMixin
+    super.build(context);
     return Column(
       children: [
         _buildHeaderToolbar(),
@@ -176,12 +175,9 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 1. Botón Nueva Tarea (replicando el diseño de la imagen)
           _buildNewTaskButton(),
-
           const SizedBox(width: 8),
 
-          // 2. Botón y selector de fecha
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -465,7 +461,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
                     Icon(Icons.flag, size: 16, color: primaryColorDark),
                     const SizedBox(width: 6),
                     Text(
-                      'Producción: ${tarea.metaProduccion} unidades', // Usando meta como placeholder
+                      'Producción: ${tarea.metaProduccion} ${tarea.productoUnidadMedidaDisplay}', // Usando meta como placeholder
                       style: const TextStyle(
                         color: primaryColorDark,
                         fontWeight: FontWeight.w600,

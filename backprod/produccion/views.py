@@ -2,15 +2,16 @@ from django.shortcuts import render
 
 # Create your views here.
 
-from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, status, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 from django.core.exceptions import ValidationError
-from datetime import date
+from datetime import date, datetime
 import openpyxl
 from django.db import transaction
+import json
 
 from .models import (
     Usuario, Linea, Turno, Colaborador,
@@ -19,7 +20,7 @@ from .models import (
     Maquina, TipoEvento,
     HojaProcesos, EventoProceso, EventoMaquina,
     Trazabilidad, TrazabilidadMateriaPrima,
-    Reproceso, Merma, FirmaTrazabilidad, TrazabilidadColaborador
+    Reproceso, Merma, FirmaTrazabilidad, TrazabilidadColaborador, 
 )
 from .serializers import (
     UsuarioSerializer, LineaSerializer, TurnoSerializer,
@@ -632,14 +633,15 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
             'hoja_procesos__tarea__producto'
         ).prefetch_related(
             'materias_primas_usadas__materia_prima',
-            'reprocesos',
-            'mermas',
+            'materias_primas_usadas__reprocesos',
+            'materias_primas_usadas__mermas',
             'firmas__usuario'
         )
         
         # Filtros opcionales
         estado = self.request.query_params.get('estado', None)
         fecha = self.request.query_params.get('fecha', None)
+        juliano = self.request.query_params.get('juliano', None)
         turno_id = self.request.query_params.get('turno', None)
         linea_id = self.request.query_params.get('linea', None) 
         producto_id = self.request.query_params.get('producto', None)
@@ -648,7 +650,24 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(estado=estado)
         
         if fecha:
-            queryset = queryset.filter(hoja_procesos__tarea__fecha=fecha)
+            try:
+                fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
+                queryset = queryset.filter(
+                    hoja_procesos__tarea__fecha_inicio__date=fecha_obj
+                )
+                print(f'Filtrando por fecha_inicio (elaboración real): {fecha_obj}')
+            except ValueError:
+                print(f'Fecha inválida: {fecha}')
+
+        if juliano:
+            try:
+                juliano_int = int(juliano)
+                queryset = queryset.filter(
+                    Q(lote__contains=f'-{juliano_int:03d}-')
+                )
+                print(f'Filtrando por juliano: {juliano_int:03d}')
+            except (ValueError, TypeError):
+                print(f'Juliano inválido: {juliano}')
         
         if turno_id:
             queryset = queryset.filter(hoja_procesos__tarea__turno_id=turno_id)
@@ -1166,7 +1185,7 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
     """
     serializer_class = FirmaTrazabilidadSerializer
     permission_classes = [IsAuthenticated]
-    http_method_names = ['get', 'post']  # Solo GET y POST
+    http_method_names = ['get', 'post']
     
     def get_queryset(self):
         """
@@ -1339,7 +1358,7 @@ class MateriaPrimaViewSet(viewsets.ModelViewSet):
     
     queryset = MateriaPrima.objects.filter(activo=True).order_by('nombre')
     serializer_class = MateriaPrimaSerializer
-    lookup_field = 'codigo'  # Usar código en vez de id
+    lookup_field = 'codigo' 
     
     def get_permissions(self):
         """
@@ -1396,14 +1415,6 @@ class MateriaPrimaViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-# ============================================================================
-# AGREGAR ESTO A: produccion/serializers.py
-# ============================================================================
-
-from rest_framework import serializers
-from .models import MateriaPrima
-
-
 class MateriaPrimaSerializer(serializers.ModelSerializer):
     """
     Serializer para Materia Prima
@@ -1419,10 +1430,10 @@ class MateriaPrimaSerializer(serializers.ModelSerializer):
             'requiere_lote',
             'activo',
         ]
-        read_only_fields = ['codigo']  # El código no se puede cambiar
+        read_only_fields = ['codigo']
     
     def validate_codigo(self, value):
         """Validar que el código sea único"""
         if MateriaPrima.objects.filter(codigo=value).exists():
             raise serializers.ValidationError("Ya existe una materia prima con este código")
-        return value.upper()  # Convertir a mayúsculas
+        return value.upper()

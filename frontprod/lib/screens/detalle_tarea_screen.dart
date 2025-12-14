@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../services/api_service.dart';
 import 'editar_tarea_screen.dart';
 
+const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 class DetalleTareaScreen extends StatefulWidget {
   final int tareaId;
 
@@ -112,7 +113,7 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.blue),
+            style: TextButton.styleFrom(foregroundColor: primaryColorDark),
             child: const Text('Editar'),
           ),
         ],
@@ -173,6 +174,7 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
             ),
           ],
         ],
+        backgroundColor: primaryColorDark,
       ),
       body: _buildBody(),
     );
@@ -281,7 +283,6 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
   Widget _buildInfoGeneralCard() {
     final lineaDetalle = _tarea!['linea_detalle'];
     final turnoDetalle = _tarea!['turno_detalle'];
-    final supervisorDetalle = _tarea!['supervisor_detalle'];
 
     return Card(
       child: Padding(
@@ -299,13 +300,11 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
             _buildInfoRow(
               Icons.calendar_today,
               'Fecha',
-              DateFormat('EEEE, d MMMM yyyy').format(
-                DateTime.parse(_tarea!['fecha']),
-              ),
+              _formatDateTime(_tarea!['fecha']),
             ),
             const SizedBox(height: 12),
             _buildInfoRow(
-              Icons.straighten,
+              Icons.conveyor_belt,
               'Línea',
               lineaDetalle['nombre'],
             ),
@@ -314,12 +313,6 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
               Icons.access_time,
               'Turno',
               turnoDetalle['nombre_display'],
-            ),
-            const SizedBox(height: 12),
-            _buildInfoRow(
-              Icons.person,
-              'Supervisor',
-              supervisorDetalle['nombre_completo'],
             ),
             const SizedBox(height: 12),
             _buildInfoRow(
@@ -465,6 +458,7 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
   }
 
   Widget _buildAuditoriaCard() {
+    final supervisorDetalle = _tarea!['supervisor_detalle'];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -480,9 +474,15 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
             const Divider(),
             _buildInfoRow(
               Icons.add_circle_outline,
-              'Creada',
+              'Creada El',
               _formatDateTime(_tarea!['fecha_creacion']),
             ),
+            _buildInfoRow(
+              Icons.person,
+              'Por',
+              supervisorDetalle['nombre_completo'],
+            ),
+            const SizedBox(height: 12),
             if (_tarea!['fecha_inicio'] != null) ...[
               const SizedBox(height: 12),
               _buildInfoRow(

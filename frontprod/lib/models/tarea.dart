@@ -7,6 +7,8 @@ class Tarea {
   final String turnoNombre;
   final String productoCodigo;
   final String productoNombre;
+  final String productoUnidadMedida;
+  final String productoUnidadMedidaDisplay;
   final int metaProduccion;
   final String estado;
   final String estadoDisplay;
@@ -22,6 +24,8 @@ class Tarea {
     required this.turnoNombre,
     required this.productoCodigo,
     required this.productoNombre,
+    required this.productoUnidadMedida,
+    required this.productoUnidadMedidaDisplay,
     required this.metaProduccion,
     required this.estado,
     required this.estadoDisplay,
@@ -39,6 +43,8 @@ class Tarea {
       turnoNombre: json['turno_nombre'],
       productoCodigo: json['producto_codigo'],
       productoNombre: json['producto_nombre'],
+      productoUnidadMedida: json['producto_unidad_medida'] ?? 'UN',
+      productoUnidadMedidaDisplay: json['producto_unidad_medida_display'] ?? 'UN',
       metaProduccion: json['meta_produccion'],
       estado: json['estado'],
       estadoDisplay: json['estado_display'],

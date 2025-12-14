@@ -6,6 +6,7 @@ import '../models/turno.dart';
 import '../models/producto.dart';
 import '../models/colaborador.dart';
 
+const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 class EditarTareaScreen extends StatefulWidget {
   final Map<String, dynamic> tarea;
 
@@ -57,8 +58,7 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
   }
 
   void _initializeData() {
-    // Inicializar con los datos de la tarea
-    _selectedDate = DateTime.parse(widget.tarea['fecha']);
+    _selectedDate = _parseFechaDDMMYYYY(widget.tarea['fecha']);
     _metaController.text = widget.tarea['meta_produccion'].toString();
     _observacionesController.text = widget.tarea['observaciones'] ?? '';
   }
@@ -70,6 +70,24 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
     _searchProductoController.dispose();
     _searchColaboradorController.dispose();
     super.dispose();
+  }
+
+  DateTime _parseFechaDDMMYYYY(String fechaStr) {
+    try {
+      final partes = fechaStr.split('-');
+      
+      if (partes.length != 3) {
+        return DateTime.now();
+      }
+      
+      final dia = int.parse(partes[0]);
+      final mes = int.parse(partes[1]);
+      final anio = int.parse(partes[2]);
+      
+      return DateTime(anio, mes, dia);
+    } catch (e) {
+      return DateTime.now();
+    }
   }
 
   Future<void> _cargarDatos() async {
@@ -144,8 +162,8 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2026),
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2080),
     );
 
     if (picked != null) {
@@ -234,8 +252,8 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    Navigator.pop(context); // Cerrar diálogo
-                    Navigator.pop(context); // Cerrar pantalla de edición
+                    Navigator.pop(context);
+                    Navigator.pop(context);
                   },
                   child: const Text('Aceptar'),
                 ),
@@ -283,7 +301,7 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
       if (errorMsg.contains('conjunto único') || 
           errorMsg.contains('ya existe') ||
           errorMsg.contains('duplicad')) {
-        mensajeUsuario = '⚠️ Ya existe una tarea con esa línea, turno, fecha y producto.\n\n'
+        mensajeUsuario = 'Ya existe una tarea con esa línea, turno, fecha y producto.\n\n'
             'No se pueden editar tareas duplicadas. Verifica los datos e intenta con valores diferentes.';
       } else if (errorMsg.contains('no autorizado')) {
         mensajeUsuario = 'No tienes permisos para editar tareas';
@@ -319,6 +337,7 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Editar Tarea'),
+        backgroundColor: primaryColorDark,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -331,7 +350,6 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Advertencia si la tarea no está pendiente
             if (widget.tarea['estado'] != 'pendiente')
               Card(
                 color: Colors.orange.shade100,
@@ -358,7 +376,7 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
               child: ListTile(
                 leading: const Icon(Icons.calendar_today),
                 title: const Text('Fecha'),
-                subtitle: Text(DateFormat('EEEE, d MMMM yyyy').format(_selectedDate)),
+                subtitle: Text(DateFormat('EEEE, d MMMM yyyy', 'es').format(_selectedDate)),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: _seleccionarFecha,
               ),
@@ -369,7 +387,7 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
             DropdownButtonFormField<Linea>(
               decoration: const InputDecoration(
                 labelText: 'Línea',
-                prefixIcon: Icon(Icons.straighten),
+                prefixIcon: Icon(Icons.conveyor_belt),
               ),
               value: _selectedLinea,
               items: _lineas.map((linea) {
@@ -556,7 +574,7 @@ class _ProductoDialog extends StatelessWidget {
                   final producto = productos[index];
                   return ListTile(
                     title: Text(producto.nombre),
-                    subtitle: Text('Código: ${producto.codigo}'),
+                    subtitle: Text('Código: ${producto.codigo} | UdM: ${producto.unidadMedidaDisplay}'), 
                     onTap: () => Navigator.pop(context, producto),
                   );
                 },

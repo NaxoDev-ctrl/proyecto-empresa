@@ -792,7 +792,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     
     try {
       // Obtener código del producto
-      final codigoProducto = _tarea!['producto_detalle']['codigo'] ?? 'XXX';
+      final codigoProducto = _tarea!['producto_detalle']['codigo'] ?? 'XXXXX';
       final loteCompleto = '$codigoProducto-$_julianoGenerado-$codigoColab';
       
       setState(() {
@@ -1165,8 +1165,8 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('UdM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                      Text('UN'),
+                      Text('UdM:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text(_tarea!['producto_detalle']['unidad_medida_display'] ?? 'UN'),
                     ],
                   ),
                 ),

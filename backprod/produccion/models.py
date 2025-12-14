@@ -204,6 +204,11 @@ class Producto(models.Model):
     Representa los productos que se fabrican.
     """
     
+    UNIDADES_MEDIDA = [
+        ('KG', 'KG'),
+        ('UN', 'UN'),
+    ]
+
     codigo = models.CharField(
         max_length=20,
         primary_key=True,
@@ -213,6 +218,13 @@ class Producto(models.Model):
     nombre = models.CharField(
         max_length=200,
         help_text="Nombre del producto. Ejemplo: alfajor manjar bitter"
+    )
+
+    unidad_medida = models.CharField(
+        max_length=20,
+        choices=UNIDADES_MEDIDA,
+        default='UN',
+        help_text='Unidad de medida del producto (generalmente UN para unidades)'
     )
     
     descripcion = models.TextField(

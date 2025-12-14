@@ -158,10 +158,15 @@ class ProductoSerializer(serializers.ModelSerializer):
     """
     Serializer para el modelo Producto.
     """
+
+    unidad_medida_display = serializers.CharField(
+        source='get_unidad_medida_display',
+        read_only=True
+    )
     
     class Meta:
         model = Producto
-        fields = ['codigo', 'nombre', 'descripcion', 'activo']
+        fields = ['codigo', 'nombre', 'unidad_medida', 'unidad_medida_display', 'descripcion', 'activo']
         read_only_fields = ['codigo']
 
 
@@ -213,10 +218,14 @@ class ProductoConRecetaSerializer(serializers.ModelSerializer):
     """
     
     materias_primas = serializers.SerializerMethodField()
+    unidad_medida_display = serializers.CharField(
+        source='get_unidad_medida_display',
+        read_only=True
+    )
     
     class Meta:
         model = Producto
-        fields = ['codigo', 'nombre', 'descripcion', 'materias_primas']
+        fields = ['codigo', 'nombre', 'unidad_medida', 'unidad_medida_display', 'descripcion', 'materias_primas']
     
     def get_materias_primas(self, obj):
         """
@@ -261,6 +270,14 @@ class TareaListSerializer(serializers.ModelSerializer):
     turno_nombre = serializers.CharField(source='turno.nombre', read_only=True)
     producto_codigo = serializers.CharField(source='producto.codigo', read_only=True)
     producto_nombre = serializers.CharField(source='producto.nombre', read_only=True)
+    producto_unidad_medida = serializers.CharField(
+        source='producto.unidad_medida',
+        read_only=True
+    )
+    producto_unidad_medida_display = serializers.CharField(
+        source='producto.get_unidad_medida_display',
+        read_only=True
+    )
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     supervisor_nombre = serializers.SerializerMethodField()
     
@@ -275,6 +292,8 @@ class TareaListSerializer(serializers.ModelSerializer):
             'turno_nombre',
             'producto_codigo',
             'producto_nombre',
+            'producto_unidad_medida',
+            'producto_unidad_medida_display',
             'meta_produccion',
             'estado',
             'estado_display',

@@ -40,32 +40,35 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: primaryColorDark,
-        elevation: 0,
         toolbarHeight: 70, 
-
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            Navigator.pop(context, true);
-          },
-        ),
-
-        title: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(left: 30.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  'assets/images/logo_entrelagosE_verde.png',
-                  height: 60,
-                ),
-                const SizedBox(width: 8),
-                
-              ],)
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0),
+          child: SizedBox(
+            child: Image.asset(
+              'assets/images/logo_entrelagosE_verde.png',
+              fit: BoxFit.contain,
+              height: 90,
+              width: 90,
+            ),
           ),
         ),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'EQUIPO PRODUCCION',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      centerTitle: true,
 
         actions: [
           // Información del usuario
@@ -87,7 +90,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                     usuario?['rol_display'] ?? '',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
+                      color: Color.fromARGB(255, 217, 244, 205),
                     ),
                   ),
                 ],

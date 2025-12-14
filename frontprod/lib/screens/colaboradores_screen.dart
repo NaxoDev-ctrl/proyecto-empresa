@@ -285,7 +285,7 @@ class _ColaboradoresScreenState extends State<ColaboradoresScreen> {
           // Header con búsqueda
           Container(
             padding: const EdgeInsets.all(16),
-            color: Theme.of(context).colorScheme.primaryContainer,
+            color: Color.fromARGB(255, 217, 244, 205),
             child: Column(
               children: [
                 Row(
@@ -430,15 +430,15 @@ class _ColaboradoresScreenState extends State<ColaboradoresScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     leading: CircleAvatar(
+                      backgroundColor: Color.fromARGB(255, 217, 244, 205),
                       child: Text(
                         colaborador.codigo.toString().length >= 3
                         ? colaborador.codigo.toString().substring(0, 3)
                         : colaborador.codigo.toString(),
-                        style: const TextStyle(fontSize: 16),
+                        style: const TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold),
                       ),
                     ),
                     title: Text(colaborador.nombreCompleto),
-                    subtitle: Text('Código: ${colaborador.codigo}'),
                     trailing: Icon(
                       colaborador.activo ? Icons.check_circle : Icons.cancel,
                       color: colaborador.activo ? Colors.green : Colors.red,

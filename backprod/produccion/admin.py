@@ -122,14 +122,14 @@ class ProductoAdmin(admin.ModelAdmin):
     Configuración del admin para Productos.
     """
     
-    list_display = ['codigo', 'nombre', 'activo']
+    list_display = ['codigo', 'nombre', 'unidad_medida', 'activo']
     list_filter = ['activo']
-    search_fields = ['codigo', 'nombre', 'descripcion']
+    search_fields = ['codigo', 'nombre', 'unidad_medida', 'descripcion']
     ordering = ['codigo']
     
     fieldsets = (
         ('Información del Producto', {
-            'fields': ('codigo', 'nombre', 'activo')
+            'fields': ('codigo', 'nombre', 'unidad_medida', 'activo')
         }),
         ('Descripción', {
             'fields': ('descripcion',),

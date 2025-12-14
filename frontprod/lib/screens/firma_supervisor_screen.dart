@@ -23,10 +23,11 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
 
   // ========== FILTROS ==========
   DateTime? _fechaSeleccionada;
+  String? _julianoFiltro;
   int? _turnoSeleccionado;
   int? _lineaSeleccionada;
   String? _productoSeleccionado;
-  String? _productoNombreSeleccionado;  // <-- Para mostrar en UI
+  String? _productoNombreSeleccionado;
 
   // ========== DATOS PARA DROPDOWNS ==========
   List<Map<String, dynamic>> _turnos = [];
@@ -87,7 +88,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
 
   // ========== CARGAR TRAZABILIDADES CON FILTROS ==========
   Future<void> _cargarTrazabilidades() async {
-    print('\n🔵🔵🔵 INICIANDO _cargarTrazabilidades 🔵🔵🔵');
     
     setState(() {
       _isLoading = true;
@@ -101,6 +101,10 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         queryParams['fecha'] = DateFormat('yyyy-MM-dd').format(_fechaSeleccionada!);
       }
 
+      if (_julianoFiltro != null && _julianoFiltro!.isNotEmpty) {
+        queryParams['juliano'] = _julianoFiltro!;
+      }
+
       if (_turnoSeleccionado != null) {
         queryParams['turno'] = _turnoSeleccionado.toString();
       }
@@ -112,15 +116,8 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       if (_productoSeleccionado != null) {
         queryParams['producto'] = _productoSeleccionado!;
       }
-
-      print('🔵 Query params: $queryParams');
-
       final response = await _apiService.getTrazabilidades(queryParams: queryParams);
 
-      print('🔵 RESPUESTA RECIBIDA:');
-      print('🔵 Tipo: ${response.runtimeType}');
-      print('🔵 Cantidad: ${response.length}');
-      
       if (response.isNotEmpty) {
         print('🔵 Primera trazabilidad:');
         print(response[0]);
@@ -132,19 +129,15 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
 
       setState(() {
         _trazabilidades = List<Map<String, dynamic>>.from(response);
-        print('🔵 _trazabilidades tiene ${_trazabilidades.length} elementos');
       });
     } catch (e, stackTrace) {
-      print('🔴 ERROR al cargar trazabilidades: $e');
-      print('🔴 Stack trace: $stackTrace');
       setState(() {
-        _error = 'Error al cargar trazabilidades: $e';
+        _error = 'Error al cargar trazabilidades: $e, $stackTrace';
       });
     } finally {
       setState(() {
         _isLoading = false;
       });
-      print('🔵🔵🔵 FIN _cargarTrazabilidades 🔵🔵🔵\n');
     }
   }
 
@@ -152,6 +145,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   void _limpiarFiltros() {
     setState(() {
       _fechaSeleccionada = null;
+      _julianoFiltro = null; 
       _turnoSeleccionado = null;
       _lineaSeleccionada = null;
       _productoSeleccionado = null;
@@ -191,8 +185,8 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         final fecha = await showDatePicker(
           context: context,
           initialDate: _fechaSeleccionada ?? DateTime.now(),
-          firstDate: DateTime(2020),
-          lastDate: DateTime(2030),
+          firstDate: DateTime(2024),
+          lastDate: DateTime(2080),
         );
 
         if (fecha != null) {
@@ -214,7 +208,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
             Text(
               _fechaSeleccionada == null
                   ? 'Seleccionar fecha'
-                  : DateFormat('dd/MM/yyyy').format(_fechaSeleccionada!),
+                  : DateFormat('dd/MM/yyyy', 'es').format(_fechaSeleccionada!),
               style: TextStyle(
                 color: _fechaSeleccionada == null ? Colors.grey[600] : Colors.black87,
               ),
@@ -223,6 +217,54 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // ========== UI: SELECTOR DE JULIANO ==========
+  Widget _buildSelectorJuliano() {
+    return TextField(
+      decoration: InputDecoration(
+        labelText: 'Día Juliano (001-366)',
+        hintText: 'Ej: 345, 001, 200',
+        prefixIcon: const Icon(Icons.calendar_month),
+        suffixIcon: _julianoFiltro != null && _julianoFiltro!.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 20),
+                onPressed: () {
+                  setState(() {
+                    _julianoFiltro = null;
+                  });
+                  _cargarTrazabilidades();
+                },
+              )
+            : null,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        helperText: 'Ingrese el día juliano del año (1-366)',
+        helperStyle: TextStyle(fontSize: 11, color: Colors.grey[600]),
+      ),
+      keyboardType: TextInputType.number,
+      maxLength: 3,
+      onChanged: (value) {
+        // Validar que sea numérico y esté en rango 1-366
+        if (value.isEmpty) {
+          setState(() {
+            _julianoFiltro = null;
+          });
+          _cargarTrazabilidades();
+          return;
+        }
+        
+        final numero = int.tryParse(value);
+        if (numero != null && numero >= 1 && numero <= 366) {
+          setState(() {
+            _julianoFiltro = value;
+          });
+          _cargarTrazabilidades();
+        }
+      },
     );
   }
 
@@ -337,6 +379,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   // ========== UI: SECCIÓN DE FILTROS ==========
   Widget _buildSeccionFiltros() {
     final hayFiltrosActivos = _fechaSeleccionada != null ||
+        _julianoFiltro != null || 
         _turnoSeleccionado != null ||
         _lineaSeleccionada != null ||
         _productoSeleccionado != null;
@@ -368,7 +411,19 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            _buildSelectorFecha(),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: _buildSelectorFecha(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildSelectorJuliano(),
+                ),
+              ],
+            ),
+
             const SizedBox(height: 12),
             _buildDropdownTurno(),
             const SizedBox(height: 12),
@@ -629,16 +684,12 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         ),
       );
     } catch (e) {
-      print('Error al construir tarjeta de trazabilidad: $e');
-      print('Datos de trazabilidad: $trazabilidad');
       return const SizedBox.shrink();
     }
   }
 
   // ========== UI: LISTA DE TRAZABILIDADES ==========
   Widget _buildListaTrazabilidades() {
-    print('🟢 _buildListaTrazabilidades llamado con ${_trazabilidades.length} trazabilidades');
-    
     if (_trazabilidades.isEmpty) {
       return Center(
         child: Padding(
@@ -674,7 +725,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
           child: ListView.builder(
             itemCount: _trazabilidades.length,
             itemBuilder: (context, index) {
-              print('🟢 Construyendo tarjeta $index');
               return _buildTarjetaTrazabilidad(_trazabilidades[index]);
             },
           ),

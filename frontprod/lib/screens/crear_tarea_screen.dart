@@ -9,6 +9,7 @@ import '../models/turno.dart';
 import '../models/producto.dart';
 import '../models/colaborador.dart';
 
+const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 class CrearTareaScreen extends StatefulWidget {
   const CrearTareaScreen({super.key});
 
@@ -94,12 +95,11 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime.now(),
+      firstDate: DateTime(2025),
       lastDate: DateTime(2080),
     );
 
     if (picked != null) {
-      // Actualizar también en el FiltroProvider
       final filtroProvider = Provider.of<FiltroProvider>(context, listen: false);
       await filtroProvider.setSelectedDate(picked);
       
@@ -129,7 +129,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
     final seleccionados = await showDialog<List<Colaborador>>(
       context: context,
       builder: (context) => _ColaboradoresDialog(
-        colaboradores: _colaboradores, // <--- **PASAR LA LISTA COMPLETA**
+        colaboradores: _colaboradores,
         searchController: _searchColaboradorController,
         seleccionados: _selectedColaboradores,
       ),
@@ -263,6 +263,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             Navigator.pop(context, true);
           },
         ),
+        backgroundColor: primaryColorDark,
       ),
       body: Form(
         key: _formKey,
@@ -274,7 +275,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
               child: ListTile(
                 leading: const Icon(Icons.calendar_today),
                 title: const Text('Fecha'),
-                subtitle: Text(DateFormat('EEEE, d MMMM yyyy', 'es_CL').format(_selectedDate)),
+                subtitle: Text(DateFormat('EEEE, d MMMM yyyy', 'es').format(_selectedDate)),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: _seleccionarFecha,
               ),
@@ -285,7 +286,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             DropdownButtonFormField<Linea>(
               decoration: const InputDecoration(
                 labelText: 'Línea',
-                prefixIcon: Icon(Icons.straighten),
+                prefixIcon: Icon(Icons.conveyor_belt),
               ),
               value: _selectedLinea,
               items: _lineas.map((linea) {
@@ -519,7 +520,7 @@ class _ProductoDialogState extends State<_ProductoDialog> {
                   final producto = _productosMostrados[index];
                   return ListTile(
                     title: Text(producto.nombre),
-                    subtitle: Text('Código: ${producto.codigo}'),
+                    subtitle: Text('Código: ${producto.codigo} | UdM: ${producto.unidadMedidaDisplay}'), 
                     onTap: () => Navigator.pop(context, producto),
                   );
                 },

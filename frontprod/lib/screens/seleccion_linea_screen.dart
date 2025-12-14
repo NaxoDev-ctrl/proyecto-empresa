@@ -101,23 +101,22 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
   }
   Widget _buildHeaderFijo(BuildContext context) {
     return SliverAppBar(
-      pinned: true, // Esto hace que el header se mantenga visible al hacer scroll
+      pinned: true,
       backgroundColor: _primaryColor,
       elevation: 0,
-      toolbarHeight: 120, // Altura adecuada para el contenido del header
+      toolbarHeight: 120,
       
-      // Botón de atrás (izquierda)
       leading: Padding(
         padding: const EdgeInsets.only(left: 16.0),
         child: GestureDetector(
           onTap: () => Navigator.of(context).pop(),
           child: CircleAvatar(
-            backgroundColor: _onPrimaryColor, // Color crema
+            backgroundColor: _onPrimaryColor,
             radius: 22,
             child: Icon(
               Icons.arrow_back,
-              color: _primaryColor, // Color guinda
-              size: 28,
+              color: _primaryColor,
+              size: 35,
             ),
           ),
         ),
@@ -156,13 +155,12 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
           child: SizedBox(
             width: 100,
             height: 100,
-            // Aquí puedes usar un icono, o cargar el logo 'E' si es distinto al de login
             child: Image.asset(
               'assets/images/logo_entrelagosE.png',
               fit: BoxFit.contain,
-              color: _onPrimaryColor, // Lo tintamos del color crema
+              color: _onPrimaryColor,
               errorBuilder: (context, error, stackTrace) => Icon(
-                Icons.emoji_events, // Placeholder
+                Icons.emoji_events,
                 color: _onPrimaryColor,
                 size: 30,
               ),

@@ -124,10 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
           SafeArea(
             child: Column(
               children: [
-                // Botón de login en esquina superior derecha
                 _buildLoginButton(),
-                
-                // Contenido central: Logo + Título + Card
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
@@ -135,26 +132,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Logo y título centrados
                           _buildLogoYTitulo(),
-                          
                           const SizedBox(height: 1),
-                          
-                          // Card de operarios
                           _buildOperariosCard(),
                         ],
                       ),
                     ),
                   ),
                 ),
-                
-                // Footer
                 AppFooter(),
               ],
             ),
           ),
-            
-          // Loading overlay
+
           if (_verificandoSesion)
             Container(
               color: Colors.black54,
@@ -171,13 +161,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildLoginButton() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: const Color.fromARGB(255, 217, 244, 205),
               borderRadius: BorderRadius.circular(12),
               boxShadow: const [
                 BoxShadow(
@@ -196,14 +186,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.all(12),
                   child: Icon(
                     Icons.person,
-                    size: 28,
-                    color: Colors.blue.shade700,
+                    size: 45,
+                    color: Color.fromARGB(255, 0, 58, 48),
                   ),
                 ),
               ),
             ),
           ),
+          SizedBox(height: 1),
         ],
+        
       ),
     );
   }
@@ -211,7 +203,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildLogoYTitulo() {
     return Column(
       children: [
-        // Logo
         Container(
           padding: EdgeInsets.all(1),
           child: ClipRRect(
@@ -231,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        SizedBox(height: 10),
+        SizedBox(height: 1),
       ],
     );
   }
@@ -261,7 +252,6 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Ícono grande
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
@@ -269,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    Icons.factory,
+                    Icons.groups,
                     size: 50,
                     color: Color.fromARGB(255, 137, 29, 66),
                   ),
@@ -277,7 +267,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 
                 const SizedBox(height: 10),
                 
-                // Título
                 Text(
                   'OPERARIOS',
                   style: TextStyle(
@@ -289,8 +278,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 
                 const SizedBox(height: 5),
-          
-                // Flecha
                 Icon(
                   Icons.arrow_forward,
                   size: 40,

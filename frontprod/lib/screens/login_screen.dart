@@ -76,15 +76,13 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. EL CONTENIDO VA PRIMERO (Al fondo de la pila)
             Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 60), // Un poco más de espacio arriba para evitar solapamiento visual
-                    
+                    const SizedBox(height: 60),
                     // Icono Central
                     Container(
                       padding: const EdgeInsets.all(20),
@@ -93,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        Icons.groups_2_outlined,
+                        Icons.supervisor_account,
                         size: 60,
                         color: _primaryColor,
                       ),
@@ -137,9 +135,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-
-            // 2. LOS BOTONES FLOTANTES VAN AL FINAL (Arriba de la pila)
-            
             // Botón de atrás (Top Left)
             Positioned(
               left: 20,
@@ -147,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: InkWell(
                 onTap: () => Navigator.of(context).pop(),
                 child: CircleAvatar(
-                  backgroundColor: Colors.white,
+                  backgroundColor: Color.fromARGB(255, 217, 244, 205),
                   radius: 22,
                   child: Icon(
                     Icons.arrow_back,
@@ -158,7 +153,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // Logo decorativo "E" (Top Right)
             Positioned(
               right: 20,
               top: 20,
@@ -170,16 +164,13 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // MODIFICADO: Ahora carga la imagen desde assets
   Widget _buildTopRightLogo() {
     return SizedBox(
       width: 120, 
       height: 120,
-      // Asegúrate de agregar 'assets/images/logo_e.png' en tu pubspec.yaml
       child: Image.asset(
         'assets/images/logo_entrelagosE_verde.png', 
         fit: BoxFit.contain,
-        // Esto muestra un placeholder si la imagen no existe aún, útil para desarrollo
         errorBuilder: (context, error, stackTrace) {
           return Container(
             decoration: BoxDecoration(

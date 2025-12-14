@@ -152,7 +152,9 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
         _eventos = eventosData;
       });
     } catch (e) {
-      print('Error al cargar eventos: $e');
+      setState(() {
+        _error = 'Error al cargar eventos: $e';
+      });
     }
   }
 
@@ -379,42 +381,96 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Producción en Curso'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () async {
-            final confirmar = await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: Text('⚠️ Advertencia'),
-                content: Text(
-                  'Si sales ahora, la producción seguirá en curso.\n\n'
-                  '¿Estás seguro de salir?',
+      appBar: AppBar(       
+        toolbarHeight: 120,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: SizedBox(
+              width: 100,
+              height: 100,
+              child: Image.asset(
+                'assets/images/logo_entrelagosE.png',
+                fit: BoxFit.contain,
+                color: const Color(0xFFFFD9C6),
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.emoji_events,
+                  color: const Color(0xFFFFD9C6),
+                  size: 35,
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('Cancelar'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text('Salir'),
-                  ),
-                ],
               ),
-            );
-
-            if (confirmar == true && mounted) {
-              Navigator.pop(context);
-            }
-          },
+            ),
+          ),
+        ],
+        title: Text('PRODUCCIÓN EN CURSO',
+          style: 
+          TextStyle(
+            fontWeight: FontWeight.w900,
+            color: Color.fromRGBO(255, 217, 198, 1),
+            fontSize: 28,
+          ),
         ),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: CircleAvatar(
+              backgroundColor: Color.fromARGB(255, 255, 217, 198),
+              radius: 22,
+              child: IconButton(
+                padding: const EdgeInsets.only(left: 2.0),
+                icon: Icon(Icons.arrow_back),
+                color: Color.fromARGB(255, 137, 29, 67),
+                iconSize: 35,
+                onPressed: () async {
+                  final confirmar = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text('Advertencia'),
+                      content: Text(
+                        'Si sales ahora, la producción seguirá en curso.\n\n'
+                        '¿Estás seguro de salir?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text('Cancelar'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text('Salir'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmar == true && mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+        backgroundColor: Color.fromARGB(255, 137, 29, 67),
       ),
       body: Column(
         children: [
           // Header con info de tarea
-          _buildHeader(),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 6,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: _buildHeader(),
+          ),
+
+          const SizedBox(height: 10),
 
           // Cronómetro
           _buildCronometro(),
@@ -434,10 +490,17 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
   Widget _buildHeader() {
     return Container(
       padding: EdgeInsets.all(16),
-      color: Theme.of(context).colorScheme.primaryContainer,
+      color: Color.fromRGBO(255, 217, 198, 0.37),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            _tarea!['producto_detalle']['codigo'],
+            style: TextStyle(
+              fontSize: 25,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           Text(
             _tarea!['producto_detalle']['nombre'],
             style: TextStyle(
@@ -448,8 +511,6 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(Icons.straighten, size: 16),
-              const SizedBox(width: 4),
               Text(_tarea!['linea_detalle']['nombre']),
               const SizedBox(width: 16),
               Icon(Icons.access_time, size: 16),
@@ -461,6 +522,7 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
       ),
     );
   }
+  
 
   Widget _buildCronometro() {
     return Container(

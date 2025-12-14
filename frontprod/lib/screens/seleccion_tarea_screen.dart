@@ -77,7 +77,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       );
 
       setState(() {
-        // 🔥 CAMBIO CLAVE: Mostrar PENDIENTES Y EN_PROGRESO
         _tareas = data
             .map((json) => Tarea.fromJson(json))
             .where((t) => t.estado == 'pendiente' || t.estado == 'en_curso')
@@ -91,9 +90,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       });
     }
   }
-
-  // ========================================================================
-  // 🔥 NUEVA LÓGICA: Detectar si iniciar o retomar
   // ========================================================================
   Future<void> _manejarTarea(Tarea tarea) async {
     if (tarea.estado == 'pendiente') {
@@ -106,7 +102,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
   }
 
   // ========================================================================
-  // INICIAR TAREA NUEVA (sin cambios en la lógica original)
+  // INICIAR TAREA NUEVA
   // ========================================================================
   Future<void> _iniciarTarea(Tarea tarea) async {
     final confirmar = await showDialog<bool>(
@@ -209,7 +205,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
   }
 
   // ========================================================================
-  // 🔥 NUEVA FUNCIÓN: Retomar tarea en progreso
+  // Retomar tarea en progreso
   // ========================================================================
   Future<void> _retomarTarea(Tarea tarea) async {
     showDialog(
@@ -233,24 +229,21 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
     );
 
     try {
-      // Obtener hoja de procesos para verificar estado
       final hojaProcesos = await _apiService.getHojaProcesosPorTarea(tarea.id);
-      
+
       if (!mounted) return;
-      Navigator.pop(context); // Cerrar loading
+      Navigator.pop(context);
 
       final hojaId = hojaProcesos['id'];
       final tieneTrazabilidad = hojaProcesos['tiene_trazabilidad'] ?? false;
-      final hojaFinalizada = hojaProcesos['finalizada'] ?? false; // ✅ USAR 'finalizada' en lugar de 'hora_fin'
+      final hojaFinalizada = hojaProcesos['finalizada'] ?? false;
 
       if (tieneTrazabilidad) {
-        // Ya completada → Mensaje
         _mostrarMensaje(
           '✅ Esta tarea ya está completada con trazabilidad registrada',
           Colors.green,
         );
       } else if (hojaFinalizada) {
-        // Eventos finalizados, falta trazabilidad → Ir a trazabilidad
         final confirmar = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -297,14 +290,14 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: Text('Cancelar'),
+                child: Text('Cancelar', style: TextStyle(color: Colors.black),),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primaryColor,
                 ),
-                child: Text('Continuar'),
+                child: Text('Continuar', style: TextStyle(color: Color.fromRGBO(255, 217, 198, 1)),),
               ),
             ],
           ),
@@ -322,7 +315,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
           );
         }
       } else {
-        // Eventos sin finalizar → Ir a hoja de procesos
         final confirmar = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -342,7 +334,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
+                    color: Color.fromRGBO(255, 217, 198, 0.37),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -370,14 +362,14 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: Text('Cancelar'),
+                child: Text('Cancelar', style: TextStyle(color: Colors.black),),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: _primaryColor,
                 ),
-                child: Text('Continuar'),
+                child: Text('Continuar', style: TextStyle(color: Color.fromRGBO(255, 217, 198, 1)),),
               ),
             ],
           ),
@@ -394,7 +386,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Cerrar loading
+      Navigator.pop(context);
       _mostrarMensaje('Error: $e', Colors.red);
     }
   }
@@ -507,8 +499,8 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 16.0),
           child: SizedBox(
-            width: 80,
-            height: 80,
+            width: 100,
+            height: 100,
             child: Image.asset(
               'assets/images/logo_entrelagosE.png',
               fit: BoxFit.contain,

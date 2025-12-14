@@ -24,12 +24,11 @@ class MyApp extends StatelessWidget {
           title: 'Chocolatería Entrelagos',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
             useMaterial3: true,
             appBarTheme: AppBarTheme(
               centerTitle: true,
               elevation: 0,
-              backgroundColor: Colors.blue.shade700,
               foregroundColor: Colors.white,
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(

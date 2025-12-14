@@ -751,29 +751,29 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   /// Calcular día juliano (1-366) basado en la fecha de la tarea
   void _calcularJuliano() {
     if (_tarea == null) {
-      print('❌ _calcularJuliano: _tarea es null');
       return;
     }
     
     try {
-      final fechaStr = _tarea!['fecha'];
-      print('📅 Fecha de la tarea: $fechaStr');
-      
-      final fechaTarea = DateTime.parse(fechaStr);
-      print('📅 Fecha parseada: $fechaTarea');
+      final fechaStr = _tarea!['fecha_elaboracion_real'] ?? _tarea!['fecha'];
+
+      final partes = fechaStr.split('-');
+      if (partes.length != 3) {
+        throw Exception('Formato de fecha inválido: $fechaStr');
+      }
+      final dia = int.parse(partes[0]);
+      final mes = int.parse(partes[1]);
+      final anio = int.parse(partes[2]);
+          
+      final fechaTarea = DateTime(anio, mes, dia);
       
       final primerDiaAnio = DateTime(fechaTarea.year, 1, 1);
       final diferencia = fechaTarea.difference(primerDiaAnio).inDays + 1;
       
-      print('✅ Juliano calculado: $diferencia');
-      
       setState(() {
         _julianoGenerado = diferencia.toString().padLeft(3, '0');
       });
-      
-      print('✅ Juliano generado: $_julianoGenerado');
     } catch (e) {
-      print('❌ Error al calcular juliano: $e');
       setState(() {
         _julianoGenerado = '---';
       });
@@ -783,38 +783,23 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   /// Generar lote en tiempo real: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_OPERADOR
   void _generarLote() {
     final codigoColab = _codigoColaboradorLoteController.text.trim();
-    
-    print('🔄 _generarLote llamado');
-    print('   - Código colaborador: "$codigoColab"');
-    print('   - _tarea es null: ${_tarea == null}');
-    print('   - Juliano actual: $_julianoGenerado');
-    
     if (_tarea == null || codigoColab.isEmpty) {
       setState(() {
         _loteGenerado = '(Ingresa código del colaborador)';
       });
-      print('⚠️  Lote no generado: falta tarea o código');
       return;
     }
     
     try {
       // Obtener código del producto
       final codigoProducto = _tarea!['producto_detalle']['codigo'] ?? 'XXX';
-      
-      print('   - Código Producto: $codigoProducto');
-      print('   - Juliano: $_julianoGenerado');
-      print('   - Código Operador: $codigoColab');
-      
-      // Formato: CÓDIGO_PRODUCTO-JULIANO-CÓDIGO_OPERADOR
       final loteCompleto = '$codigoProducto-$_julianoGenerado-$codigoColab';
       
       setState(() {
         _loteGenerado = loteCompleto;
       });
       
-      print('✅ Lote generado: $_loteGenerado');
     } catch (e) {
-      print('❌ Error al generar lote: $e');
       setState(() {
         _loteGenerado = '(Error al generar)';
       });
@@ -862,13 +847,75 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: 
-        Text('Registro Trazabilidad', 
-          style: 
-          TextStyle(
-            fontWeight: FontWeight.bold, 
-            color: Color.fromRGBO(255, 217, 198, 1)
+        toolbarHeight: 120,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: SizedBox(
+              width: 100,
+              height: 100,
+              child: Image.asset(
+                'assets/images/logo_entrelagosE.png',
+                fit: BoxFit.contain,
+                color: const Color(0xFFFFD9C6),
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.emoji_events,
+                  color: const Color(0xFFFFD9C6),
+                  size: 35,
+                ),
+              ),
             ),
+          ),
+        ],
+        title: 
+          Text('REGISTRO DE TRAZABILIDAD', 
+            style: 
+            TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color.fromRGBO(255, 217, 198, 1),
+              fontSize: 28,
+            ),
+          ),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0),
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: CircleAvatar(
+              backgroundColor: Color.fromARGB(255, 255, 217, 198),
+              radius: 22,
+              child: IconButton(
+                padding: const EdgeInsets.only(left: 2.0),
+                icon: Icon(Icons.arrow_back),
+                color: Color.fromARGB(255, 137, 29, 67),
+                iconSize: 35,
+                onPressed: () async {
+                  final confirmar = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text('Advertencia'),
+                      content: Text(
+                        'Si sales ahora, la trazabilidad quedará pendiente.\n\n'
+                        '¿Estás seguro de salir?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text('Cancelar'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text('Salir'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmar == true && mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+            ),
+          ),
         ),
         backgroundColor: Color.fromARGB(255, 137, 29, 67),
       ),
@@ -897,10 +944,10 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Icon(Icons.save, size: 28),
+                    : Icon(Icons.save, size: 28, color: Colors.white),
                 label: Text(
                   _isSaving ? 'GUARDANDO...' : 'GUARDAR TRAZABILIDAD',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
@@ -935,7 +982,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('F. ELAB.', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(_tarea!['fecha'] ?? ''),
+                      Text(_tarea!['fecha_elaboracion_real'] ?? _tarea!['fecha'] ?? ''),
                     ],
                   ),
                 ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:frontprod/services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
-import 'crear_tarea_screen.dart';
 import 'lista_tareas_screen.dart';
 import 'colaboradores_screen.dart';
 import 'firma_supervisor_screen.dart';
@@ -19,11 +18,11 @@ class SupervisorDashboard extends StatefulWidget {
 class _SupervisorDashboardState extends State<SupervisorDashboard> {
   final ApiService _apiService = ApiService();
   int _selectedIndex = 0;
-  int _refreshKey = 0; // Key para forzar rebuild de la lista
+  int _refreshKey = 0;
 
   void _refreshLista() {
     setState(() {
-      _refreshKey++; // Incrementar para forzar rebuild
+      _refreshKey++;
     });
   }
 
@@ -148,7 +147,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+              backgroundColor: const Color.fromARGB(255, 88, 26, 21),
             ),
             child: const Text('Cerrar Sesión'),
           ),

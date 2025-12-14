@@ -1313,8 +1313,15 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         
         # Crear trazabilidad
         from datetime import datetime
-        fecha_actual = datetime.now()
-        juliano_calculado = Trazabilidad.calcular_juliano(fecha_actual)
+        hoja_procesos = validated_data.get('hoja_procesos')
+        tarea = hoja_procesos.tarea
+        if tarea.fecha_inicio:
+            fecha_elaboracion = tarea.fecha_inicio.date()  # Convertir datetime a date
+            print(f'📅 Usando fecha de INICIO de tarea: {fecha_elaboracion}')
+        else:
+            fecha_elaboracion = tarea.fecha
+            print(f'⚠️  Tarea no iniciada, usando fecha planificada: {fecha_elaboracion}')
+        juliano_calculado = Trazabilidad.calcular_juliano(fecha_elaboracion)
         print(f'📅 Juliano calculado: {juliano_calculado}')
 
         trazabilidad = Trazabilidad(**validated_data)

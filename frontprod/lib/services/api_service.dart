@@ -3,9 +3,6 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mime/mime.dart';
-import 'dart:io';
-
-
 
 class ApiService {
   // IMPORTANTE: Cambia esta URL según tu configuración
@@ -89,7 +86,6 @@ class ApiService {
     if (mimeType != null) {
       final parts = mimeType.split('/');
       if (parts.length == 2 && parts[0] == 'image') {
-        print('Tipo MIME detectado: $mimeType');
         return MediaType(parts[0], parts[1]);
       }
     }
@@ -98,7 +94,6 @@ class ApiService {
     if (imageBytes.length >= 2) {
       // JPEG: FF D8 FF
       if (imageBytes[0] == 0xFF && imageBytes[1] == 0xD8) {
-        print('Detectado JPEG por magic number');
         return MediaType('image', 'jpeg');
       }
       
@@ -108,7 +103,6 @@ class ApiService {
           imageBytes[1] == 0x50 &&
           imageBytes[2] == 0x4E &&
           imageBytes[3] == 0x47) {
-        print('Detectado PNG por magic number');
         return MediaType('image', 'png');
       }
       
@@ -117,7 +111,6 @@ class ApiService {
           imageBytes[0] == 0x47 &&
           imageBytes[1] == 0x49 &&
           imageBytes[2] == 0x46) {
-        print('Detectado GIF por magic number');
         return MediaType('image', 'gif');
       }
       
@@ -129,19 +122,16 @@ class ApiService {
           imageBytes[9] == 0x45 &&
           imageBytes[10] == 0x42 &&
           imageBytes[11] == 0x50) {
-        print('Detectado WEBP por magic number');
         return MediaType('image', 'webp');
       }
       
       // BMP: 42 4D
       if (imageBytes[0] == 0x42 && imageBytes[1] == 0x4D) {
-        print('Detectado BMP por magic number');
         return MediaType('image', 'bmp');
       }
     }
     
     // Default: asumir JPEG
-    print('Tipo no detectado, usando JPEG por defecto');
     return MediaType('image', 'jpeg');
   }
 
@@ -202,8 +192,6 @@ class ApiService {
   // ========================================================================
   // LÍNEAS
   // ========================================================================
-
-  /// Obtener todas las líneas activas
   Future<List<dynamic>> getLineas() async {
     try {
       final response = await http.get(
@@ -227,8 +215,6 @@ class ApiService {
   // ========================================================================
   // TURNOS
   // ========================================================================
-
-  /// Obtener todos los turnos activos
   Future<List<dynamic>> getTurnos() async {
     try {
       final response = await http.get(
@@ -1082,6 +1068,26 @@ class ApiService {
       }
     } catch (e) {
       print('❌ Error en updateTrazabilidad: $e');
+      throw Exception('Error de conexión: $e');
+    }
+  }
+  // ============================================================================
+  // HOJA DE PROCESOS - DETALLE
+  // ============================================================================
+  Future<Map<String, dynamic>> getHojaProcesosDetalle(int hojaProcesosId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/hojas-procesos/$hojaProcesosId/'),
+        headers: _getHeaders(),  // ✅ Usar el método existente
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(utf8.decode(response.bodyBytes));
+      } else {
+        _handleError(response);
+        throw Exception('Error al obtener detalle de hoja de procesos');
+      }
+    } catch (e) {
       throw Exception('Error de conexión: $e');
     }
   }

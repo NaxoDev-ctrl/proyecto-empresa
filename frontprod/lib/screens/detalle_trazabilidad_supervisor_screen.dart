@@ -1,12 +1,15 @@
 // ============================================================================
 // PANTALLA: Detalle de Trazabilidad para Supervisor - VERSIÓN CORREGIDA
 // ============================================================================
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
-import 'dart:io';
+import 'detalle_hoja_procesos_screen.dart';
+
 
 const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 class DetalleTrazabilidadSupervisorScreen extends StatefulWidget {
@@ -51,6 +54,7 @@ class _DetalleTrazabilidadSupervisorScreenState
   final TextEditingController _cantidadProducidaController = TextEditingController();
   final TextEditingController _observacionesController = TextEditingController();
   final TextEditingController _codigoColaboradorLoteController = TextEditingController();
+  
 
   Uint8List? _fotoEtiqueta;
   String? _nombreArchivoFoto;
@@ -98,10 +102,7 @@ class _DetalleTrazabilidadSupervisorScreenState
   // Generar nuevo lote
   final nuevoLote = '$codigoProducto-$juliano-$codigoColaborador';
   
-  // Forzar rebuild del widget para mostrar el nuevo lote
   setState(() {
-    // El lote se mostrará automáticamente porque usamos
-    // el valor del controller y el juliano de _trazabilidad
   });
 }
 
@@ -964,6 +965,52 @@ class _DetalleTrazabilidadSupervisorScreenState
               ],
             ),
           ),
+          SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                // Manejo robusto: puede ser int o Map
+                final hojaProcesos = _trazabilidad!['hoja_procesos'];
+                final int hojaProcesosId;
+                
+                if (hojaProcesos is int) {
+                  // Si es un entero directo
+                  hojaProcesosId = hojaProcesos;
+                } else if (hojaProcesos is Map) {
+                  // Si es un objeto con id
+                  hojaProcesosId = hojaProcesos['id'] as int;
+                } else {
+                  // Fallback (no debería llegar aquí)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No se pudo obtener ID de hoja de procesos'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+                
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DetalleHojaProcesosSupervisorScreen(
+                      hojaProcesosId: hojaProcesosId,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.list_alt),
+              label: const Text('Ver Hoja de Procesos'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+                side: BorderSide(color: primaryColorDark, width: 2),
+                foregroundColor: primaryColorDark,
+              ),
+            ),
+          ),
           
           Divider(height: 24),
           
@@ -993,7 +1040,7 @@ class _DetalleTrazabilidadSupervisorScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('UdM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    Text(producto['unidad_medida_display'] ?? 'UN'),
+                    Text(_tarea!['unidad_medida_display'] ?? _tarea!['unidad_medida'] ?? 'UN'),
                   ],
                 ),
               ),
@@ -1723,8 +1770,8 @@ class _DetalleTrazabilidadSupervisorScreenState
                               color: Colors.white,
                             ),
                           )
-                        : Icon(Icons.save),
-                    label: Text(_isSaving ? 'Guardando...' : 'Guardar Cambios'),
+                        : Icon(Icons.save, color: Colors.white),
+                    label: Text(_isSaving ? 'Guardando...' : 'Guardar Cambios', style: TextStyle(color: Colors.white),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       padding: EdgeInsets.all(16),
@@ -1745,8 +1792,8 @@ class _DetalleTrazabilidadSupervisorScreenState
                               color: Colors.white,
                             ),
                           )
-                        : Icon(Icons.edit_note),
-                    label: Text(_isSaving ? 'Firmando...' : 'Firmar Trazabilidad'),
+                        : Icon(Icons.edit_note, color: Colors.white),
+                    label: Text(_isSaving ? 'Firmando...' : 'Firmar Trazabilidad', style: TextStyle(color: Colors.white),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       padding: EdgeInsets.all(16),

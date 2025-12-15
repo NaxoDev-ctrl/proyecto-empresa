@@ -4,10 +4,10 @@
 // ============================================================================
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '../services/api_service.dart';
 import 'detalle_trazabilidad_supervisor_screen.dart';
 
+const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 class FirmaSupervisorScreen extends StatefulWidget {
   const FirmaSupervisorScreen({Key? key}) : super(key: key);
 
@@ -147,7 +147,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   // ========== LIMPIAR FILTROS ==========
   void _limpiarFiltros() {
     setState(() {
-      _fechaSeleccionada = DateTime.now();
+      _fechaSeleccionada = null;
       _julianoFiltro = null; 
       _turnoSeleccionado = null;
       _lineaSeleccionada = null;
@@ -203,6 +203,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
+          color: Colors.white,
           border: Border.all(color: Colors.grey[400]!),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -287,6 +288,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         const DropdownMenuItem<int?>(
           value: null,
           child: Text('Todos los turnos'),
+
         ),
         ..._turnos.map((turno) {
           return DropdownMenuItem<int?>(
@@ -341,6 +343,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
+          color: Colors.white,
           border: Border.all(color: Colors.grey[400]!),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -391,6 +394,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         _productoSeleccionado != null;
 
     return Card(
+      color: Color.fromARGB(255, 224, 245, 214),
       margin: const EdgeInsets.all(16),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -405,14 +409,14 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
+                    color: primaryColorDark,
                   ),
                 ),
                 if (hayFiltrosActivos)
                   TextButton.icon(
                     onPressed: _limpiarFiltros,
-                    icon: const Icon(Icons.clear_all, size: 18),
-                    label: const Text('Limpiar'),
+                    icon: const Icon(Icons.clear_all, size: 18, color: primaryColorDark),
+                    label: const Text('Limpiar', style: TextStyle(color: primaryColorDark)),
                   ),
               ],
             ),

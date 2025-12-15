@@ -431,24 +431,6 @@ class TareaCreateUpdateSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, data):
-        """Validaciones adicionales"""
-        # Validar que no exista una tarea igual
-        tarea_existente = Tarea.objects.filter(
-            linea=data['linea'],
-            turno=data['turno'],
-            fecha=data['fecha'],
-            producto=data['producto']
-        )
-        
-        # Si estamos actualizando, excluir la tarea actual
-        if self.instance:
-            tarea_existente = tarea_existente.exclude(pk=self.instance.pk)
-        
-        if tarea_existente.exists():
-            raise serializers.ValidationError(
-                "Ya existe una tarea con esa línea, turno, fecha y producto"
-            )
-        
         return data
     
     def create(self, validated_data):

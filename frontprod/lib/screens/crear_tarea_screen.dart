@@ -33,6 +33,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
   Turno? _selectedTurno;
   Producto? _selectedProducto;
   List<Colaborador> _selectedColaboradores = [];
+  String _unidadMedidaProducto = 'UN';
 
   // Listas de opciones
   List<Linea> _lineas = [];
@@ -121,6 +122,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
     if (producto != null) {
       setState(() {
         _selectedProducto = producto;
+        _unidadMedidaProducto = producto.unidadMedidaDisplay ?? 'UN';
       });
     }
   }
@@ -348,10 +350,10 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             // Meta de producción
             TextFormField(
               controller: _metaController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Meta de Producción',
                 prefixIcon: Icon(Icons.flag),
-                suffixText: 'unidades',
+                suffixText: _unidadMedidaProducto,
               ),
               keyboardType: TextInputType.number,
               validator: (value) {
@@ -421,11 +423,13 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.save),
+                    : const Icon(Icons.save, color: primaryColorDark),
+                    
                 label: Text(
                   _isLoading ? 'Guardando...' : 'Crear Tarea',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
+                    color: primaryColorDark,
                   ),
                 ),
               ),

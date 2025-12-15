@@ -30,6 +30,8 @@ class Producto {
     return {
       'codigo': codigo,
       'nombre': nombre,
+      'unidad_medida': unidadMedida,
+      'unidad_medida_display': unidadMedidaDisplay,
       'descripcion': descripcion,
       'activo': activo,
     };

@@ -445,7 +445,6 @@ class Tarea(models.Model):
             models.Index(fields=['estado']),
             models.Index(fields=['fecha']),
         ]
-        unique_together = ['linea', 'turno', 'fecha', 'producto']
     
     def __str__(self):
         return f"{self.fecha} - {self.linea.nombre} - {self.turno.nombre} - {self.producto.codigo}"

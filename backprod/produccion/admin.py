@@ -529,51 +529,6 @@ class FirmaTrazabilidadAdmin(admin.ModelAdmin):
 
 
 # ============================================================================
-# ADMIN: TrazabilidadMateriaPrima
-# ============================================================================
-@admin.register(TrazabilidadMateriaPrima)
-class TrazabilidadMateriaPrimaAdmin(admin.ModelAdmin):
-    list_display = [
-        'id',
-        'trazabilidad',
-        'materia_prima',
-        'lote',
-        'cantidad_usada',
-        'unidad_medida',
-        'get_reprocesos_info',
-        'get_mermas_info',
-    ]
-    list_filter = ['trazabilidad', 'materia_prima']
-    search_fields = ['materia_prima__nombre', 'lote']
-    inlines = [ReprocesoInline, MermaInline]
-    
-    def get_reprocesos_info(self, obj):
-        count = obj.reprocesos.count()
-        if count > 0:
-            total = sum(r.cantidad for r in obj.reprocesos.all())
-            return format_html(
-                '<span style="color: orange; font-weight: bold;">♻️ {} reprocesos ({} {})</span>',
-                count,
-                total,
-                obj.unidad_medida
-            )
-        return '-'
-    get_reprocesos_info.short_description = 'Reprocesos'
-    
-    def get_mermas_info(self, obj):
-        count = obj.mermas.count()
-        if count > 0:
-            total = sum(m.cantidad for m in obj.mermas.all())
-            return format_html(
-                '<span style="color: red; font-weight: bold;">🗑️ {} mermas ({} {})</span>',
-                count,
-                total,
-                obj.unidad_medida
-            )
-        return '-'
-    get_mermas_info.short_description = 'Mermas'
-
-# ============================================================================
 # ADMIN: Reproceso
 # ============================================================================
 @admin.register(Reproceso)
@@ -658,10 +613,84 @@ class TrazabilidadMateriaPrimaInline(admin.TabularInline):
         'materia_prima', 
         'lote', 
         'cantidad_usada', 
-        'unidad_medida'
+        'unidad_medida',
+        'get_reprocesos_count',
+        'get_mermas_count',
     ]
+    readonly_fields = ['get_reprocesos_count', 'get_mermas_count']
+    
+    def get_reprocesos_count(self, obj):
+        if obj.pk:
+            count = obj.reprocesos.count()
+            if count > 0:
+                total = sum(r.cantidad for r in obj.reprocesos.all())
+                return format_html(
+                    '<span style="color: orange; font-weight: bold;">♻️ {} ({} total)</span>',
+                    count,
+                    total
+                )
+            return '-'
+        return '-'
+    get_reprocesos_count.short_description = 'Reprocesos'
+    
+    def get_mermas_count(self, obj):
+        if obj.pk:
+            count = obj.mermas.count()
+            if count > 0:
+                total = sum(m.cantidad for m in obj.mermas.all())
+                return format_html(
+                    '<span style="color: red; font-weight: bold;">🗑️ {} ({} total)</span>',
+                    count,
+                    total
+                )
+            return '-'
+        return '-'
+    get_mermas_count.short_description = 'Mermas'
+    
+# ============================================================================
+# ADMIN: TrazabilidadMateriaPrima
+# ============================================================================
+@admin.register(TrazabilidadMateriaPrima)
+class TrazabilidadMateriaPrimaAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'trazabilidad',
+        'materia_prima',
+        'lote',
+        'cantidad_usada',
+        'unidad_medida',
+        'get_reprocesos_info',
+        'get_mermas_info',
+    ]
+    list_filter = ['trazabilidad', 'materia_prima']
+    search_fields = ['materia_prima__nombre', 'lote']
     inlines = [ReprocesoInline, MermaInline]
     
+    def get_reprocesos_info(self, obj):
+        count = obj.reprocesos.count()
+        if count > 0:
+            total = sum(r.cantidad for r in obj.reprocesos.all())
+            return format_html(
+                '<span style="color: orange; font-weight: bold;">♻️ {} reprocesos ({} {})</span>',
+                count,
+                total,
+                obj.unidad_medida
+            )
+        return '-'
+    get_reprocesos_info.short_description = 'Reprocesos'
+    
+    def get_mermas_info(self, obj):
+        count = obj.mermas.count()
+        if count > 0:
+            total = sum(m.cantidad for m in obj.mermas.all())
+            return format_html(
+                '<span style="color: red; font-weight: bold;">🗑️ {} mermas ({} {})</span>',
+                count,
+                total,
+                obj.unidad_medida
+            )
+        return '-'
+    get_mermas_info.short_description = 'Mermas'
 
 # ============================================================================
 # ADMIN: Trazabilidad

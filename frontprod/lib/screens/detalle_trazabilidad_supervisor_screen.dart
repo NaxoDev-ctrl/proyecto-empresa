@@ -30,6 +30,14 @@ class _DetalleTrazabilidadSupervisorScreenState
   String? _error;
   bool _modoEdicion = false;
 
+  double _convertirADouble(dynamic valor) {
+  if (valor == null) return 0.0;
+  if (valor is double) return valor;
+  if (valor is int) return valor.toDouble();
+  if (valor is String) return double.tryParse(valor) ?? 0.0;
+  return 0.0;
+}
+
   // ========== DATOS ORIGINALES (para revertir cambios) ==========
   Map<String, Map<String, dynamic>> _materiasPrimasOriginales = {};
   List<Map<String, dynamic>> _reprocesosOriginales = [];
@@ -51,8 +59,8 @@ class _DetalleTrazabilidadSupervisorScreenState
   final Map<String, Map<String, dynamic>> _datosMateriasPrimas = {};
   final Map<String, TextEditingController> _loteControllers = {};
   final Map<String, TextEditingController> _consumoControllers = {};
-  final Map<String, Map<String, dynamic>?> _reprocesosData = {}; 
-  final Map<String, Map<String, dynamic>?> _mermasData = {};
+  final Map<String, List<Map<String, dynamic>>> _reprocesosData = {}; 
+  final Map<String, List<Map<String, dynamic>>> _mermasData = {};
   final Map<String, TextEditingController> _reprocesoControllers = {};
   final Map<String, TextEditingController> _mermaControllers = {};
   
@@ -181,34 +189,24 @@ class _DetalleTrazabilidadSupervisorScreenState
           );
           
           final reprocesos = mp['reprocesos'] as List? ?? [];
-          if (reprocesos.isNotEmpty) {
-            final reproceso = reprocesos[0];
-            _reprocesosData[codigo] = {
-              'cantidad': reproceso['cantidad'],
-              'causas': reproceso['causas'],
-            };
-            _reprocesoControllers[codigo] = TextEditingController(
-              text: reproceso['cantidad'].toString()
-            );
-          } else {
-            _reprocesosData[codigo] = null;
-            _reprocesoControllers[codigo] = TextEditingController(text: '0');
-          }
+          _reprocesosData[codigo] = reprocesos.map((r) => {
+            'cantidad': _convertirADouble(r['cantidad']),
+            'causas': r['causas'].toString(),
+          }).toList();
 
-          final mermas = mp['mermas'] as List? ?? [];
-          if (mermas.isNotEmpty) {
-            final merma = mermas[0];
-            _mermasData[codigo] = {
-              'cantidad': merma['cantidad'],
-              'causas': merma['causas'],
-            };
-            _mermaControllers[codigo] = TextEditingController(
-              text: merma['cantidad'].toString()
-            );
-          } else {
-            _mermasData[codigo] = null;
-            _mermaControllers[codigo] = TextEditingController(text: '0');
-          }
+          final totalReproceso = _reprocesosData[codigo]!.isEmpty 
+              ? 0.0 
+              : _reprocesosData[codigo]!.fold(0.0, (sum, r) => sum + (r['cantidad'] as double));
+          _reprocesoControllers[codigo] = TextEditingController(
+            text: totalReproceso.toString()
+          );
+
+          final totalMerma = _mermasData[codigo]!.isEmpty 
+              ? 0.0 
+              : _mermasData[codigo]!.fold(0.0, (sum, m) => sum + (m['cantidad'] as double));
+          _mermaControllers[codigo] = TextEditingController(
+            text: totalMerma.toString()
+          );
 
           _datosMateriasPrimas[codigo] = {
             'materia_prima_id': codigo,
@@ -416,40 +414,20 @@ class _DetalleTrazabilidadSupervisorScreenState
           'unidad_medida': mp['unidad_medida'],
         };
 
-        final reprocesoData = _reprocesosData[codigo];
-        if (reprocesoData != null && 
-            reprocesoData['cantidad'] != null && 
-            reprocesoData['cantidad'] is num &&
-            (reprocesoData['cantidad'] as num) > 0) {
-        
-          final cantidadReproceso = reprocesoData['cantidad'] is double 
-              ? reprocesoData['cantidad'] 
-              : double.parse(reprocesoData['cantidad'].toString());
-          
-          mpData['reprocesos'] = [
-            {
-              'cantidad': cantidadReproceso,
-              'causas': reprocesoData['causas']?.toString() ?? '',
-            }
-          ];
+        final reprocesos = _reprocesosData[codigo] ?? [];
+        if (reprocesos.isNotEmpty) {
+          mpData['reprocesos'] = reprocesos.map((r) => {
+            'cantidad': r['cantidad'],
+            'causas': r['causas'],
+          }).toList();
         }
 
-        final mermaData = _mermasData[codigo];
-        if (mermaData != null && 
-            mermaData['cantidad'] != null && 
-            mermaData['cantidad'] is num &&
-            (mermaData['cantidad'] as num) > 0) {
-          
-          final cantidadMerma = mermaData['cantidad'] is double 
-              ? mermaData['cantidad'] 
-              : double.parse(mermaData['cantidad'].toString());
-          
-          mpData['mermas'] = [
-            {
-              'cantidad': cantidadMerma,
-              'causas': mermaData['causas']?.toString() ?? '',
-            }
-          ];
+        final mermas = _mermasData[codigo] ?? [];
+        if (mermas.isNotEmpty) {
+          mpData['mermas'] = mermas.map((m) => {
+            'cantidad': m['cantidad'],
+            'causas': m['causas'],
+          }).toList();
         }
         materiasPrimasData.add(mpData);
       }
@@ -511,8 +489,11 @@ class _DetalleTrazabilidadSupervisorScreenState
   }
   // ========== AGREGAR/ELIMINAR REPROCESO ==========
   Future<void> _ingresarReproceso(String codigoMP, String nombreMP) async {
-    final reprocesoActual = _reprocesosData[codigoMP];
+    final reprocesosList = _reprocesosData[codigoMP] ?? [];
     final mp = _datosMateriasPrimas[codigoMP]!;
+    
+    // Tomar el primero si existe
+    final reprocesoActual = reprocesosList.isNotEmpty ? reprocesosList[0] : null;
     
     final resultado = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -527,10 +508,10 @@ class _DetalleTrazabilidadSupervisorScreenState
     if (resultado != null) {
       setState(() {
         if (resultado['cantidad'] == 0.0) {
-          _reprocesosData[codigoMP] = null;
+          _reprocesosData[codigoMP] = [];
           _reprocesoControllers[codigoMP]!.text = '0';
         } else {
-          _reprocesosData[codigoMP] = resultado;
+          _reprocesosData[codigoMP] = [resultado];
           _reprocesoControllers[codigoMP]!.text = resultado['cantidad'].toString();
         }
       });
@@ -539,8 +520,11 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   // ========== AGREGAR/ELIMINAR MERMA ==========
   Future<void> _ingresarMerma(String codigoMP, String nombreMP) async {
-    final mermaActual = _mermasData[codigoMP];
+    final mermasList = _mermasData[codigoMP] ?? [];
     final mp = _datosMateriasPrimas[codigoMP]!;
+    
+    // Tomar el primero si existe
+    final mermaActual = mermasList.isNotEmpty ? mermasList[0] : null;
     
     final resultado = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -555,10 +539,10 @@ class _DetalleTrazabilidadSupervisorScreenState
     if (resultado != null) {
       setState(() {
         if (resultado['cantidad'] == 0.0) {
-          _mermasData[codigoMP] = null;
+          _mermasData[codigoMP] = [];
           _mermaControllers[codigoMP]!.text = '0';
         } else {
-          _mermasData[codigoMP] = resultado;
+          _mermasData[codigoMP] = [resultado];
           _mermaControllers[codigoMP]!.text = resultado['cantidad'].toString();
         }
       });
@@ -597,8 +581,8 @@ class _DetalleTrazabilidadSupervisorScreenState
         _reprocesoControllers[codigo] = TextEditingController(text: '0');
         _mermaControllers[codigo] = TextEditingController(text: '0');
         
-        _reprocesosData[codigo] = null;
-        _mermasData[codigo] = null;
+        _reprocesosData[codigo] = [];
+        _mermasData[codigo] = [];
         
         _datosMateriasPrimas[codigo] = {
           'materia_prima_id': codigo,
@@ -1238,8 +1222,8 @@ class _DetalleTrazabilidadSupervisorScreenState
                     ),
                     ..._materiasPrimasSeleccionadas.map((codigo) {
                       final mp = _datosMateriasPrimas[codigo]!;
-                      final tieneReproceso = _reprocesosData[codigo] != null;
-                      final tieneMerma = _mermasData[codigo] != null;
+                      final tieneReproceso = (_reprocesosData[codigo] ?? []).isNotEmpty;
+                      final tieneMerma = (_mermasData[codigo] ?? []).isNotEmpty;
                       
                       return TableRow(
                         children: [

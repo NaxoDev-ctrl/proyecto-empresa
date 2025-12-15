@@ -1329,11 +1329,10 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         print(f'Código colaborador lote: {codigo_colaborador_lote}')
         
         # Crear trazabilidad
-        from datetime import datetime
         hoja_procesos = validated_data.get('hoja_procesos')
         tarea = hoja_procesos.tarea
         if tarea.fecha_inicio:
-            fecha_elaboracion = tarea.fecha_inicio.date()  # Convertir datetime a date
+            fecha_elaboracion = tarea.fecha_inicio.date()
             print(f'📅 Usando fecha de INICIO de tarea: {fecha_elaboracion}')
         else:
             fecha_elaboracion = tarea.fecha
@@ -1441,3 +1440,116 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
         print('='*70 + '\n')
         
         return trazabilidad
+    
+    def update(self, instance, validated_data):
+        """Actualizar trazabilidad con sus relaciones"""
+        
+        print('\n' + '='*70)
+        print('ACTUALIZANDO TRAZABILIDAD')
+        print('='*70)
+        
+        # Extraer datos relacionados
+        materias_primas_data = validated_data.pop('materias_primas', None)
+        colaboradores_codigos = validated_data.pop('colaboradores_codigos', None)
+        codigo_colaborador_lote = validated_data.pop('codigo_colaborador_lote', None)
+        
+        # Actualizar campos básicos de la trazabilidad
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # Actualizar lote si se proporcionó código de colaborador
+        if codigo_colaborador_lote:
+            partes_lote = instance.lote.split('-')
+            if len(partes_lote) == 3:
+                nuevo_lote = f"{partes_lote[0]}-{partes_lote[1]}-{codigo_colaborador_lote}"
+                instance.lote = nuevo_lote
+                print(f'🏷️  Lote actualizado: {nuevo_lote}')
+        
+        instance.save()
+        print(f'✅ Trazabilidad actualizada: ID {instance.id}')
+        
+        # Actualizar materias primas si se proporcionaron
+        if materias_primas_data is not None:
+            print(f'\n🔄 Actualizando materias primas ({len(materias_primas_data)} total)...')
+            
+            # ELIMINAR todas las materias primas existentes
+            # (esto también elimina reprocesos/mermas por CASCADE)
+            instance.materias_primas_usadas.all().delete()
+            print('  🗑️  Materias primas anteriores eliminadas')
+            
+            # CREAR nuevas materias primas con sus reprocesos/mermas
+            for i, mp_data in enumerate(materias_primas_data):
+                try:
+                    materia_prima = MateriaPrima.objects.get(codigo=mp_data['materia_prima_id'])
+                    
+                    mp_usada = TrazabilidadMateriaPrima.objects.create(
+                        trazabilidad=instance,
+                        materia_prima=materia_prima,
+                        lote=mp_data.get('lote'),
+                        cantidad_usada=float(mp_data['cantidad_usada']),
+                        unidad_medida=mp_data['unidad_medida']
+                    )
+                    print(f'  ✅ MP {i+1}: {materia_prima.nombre}')
+                    
+                    # CREAR REPROCESOS
+                    if 'reprocesos' in mp_data and mp_data['reprocesos']:
+                        print(f'    🔍 Procesando reprocesos para {materia_prima.nombre}...')
+                        
+                        for j, reproceso_data in enumerate(mp_data['reprocesos']):
+                            try:
+                                Reproceso.objects.create(
+                                    trazabilidad_materia_prima=mp_usada,
+                                    cantidad=float(reproceso_data['cantidad']),
+                                    causas=reproceso_data['causas']
+                                )
+                                print(f'      ✅ Reproceso {j+1}: {reproceso_data["cantidad"]} - {reproceso_data["causas"]}')
+                            except Exception as e:
+                                print(f'      ❌ Error al crear reproceso {j+1}: {e}')
+                    else:
+                        print(f'    ℹ️  Sin reprocesos para {materia_prima.nombre}')
+                    
+                    # CREAR MERMAS
+                    if 'mermas' in mp_data and mp_data['mermas']:
+                        print(f'    🔍 Procesando mermas para {materia_prima.nombre}...')
+                        
+                        for j, merma_data in enumerate(mp_data['mermas']):
+                            try:
+                                Merma.objects.create(
+                                    trazabilidad_materia_prima=mp_usada,
+                                    cantidad=float(merma_data['cantidad']),
+                                    causas=merma_data['causas']
+                                )
+                                print(f'      ✅ Merma {j+1}: {merma_data["cantidad"]} - {merma_data["causas"]}')
+                            except Exception as e:
+                                print(f'      ❌ Error al crear merma {j+1}: {e}')
+                    else:
+                        print(f'    ℹ️  Sin mermas para {materia_prima.nombre}')
+                        
+                except MateriaPrima.DoesNotExist:
+                    print(f'  ❌ MP {i+1}: No encontrada {mp_data.get("materia_prima_id")}')
+                except Exception as e:
+                    print(f'  ❌ MP {i+1}: Error general: {e}')
+                    import traceback
+                    traceback.print_exc()
+        
+        # Actualizar colaboradores si se proporcionaron
+        if colaboradores_codigos is not None:
+            print(f'\n👥 Actualizando colaboradores ({len(colaboradores_codigos)} total)...')
+            
+            # Eliminar colaboradores anteriores
+            instance.colaboradores_reales.all().delete()
+            
+            # Crear nuevos colaboradores
+            for codigo in colaboradores_codigos:
+                colaborador = Colaborador.objects.get(codigo=codigo)
+                TrazabilidadColaborador.objects.create(
+                    trazabilidad=instance,
+                    colaborador=colaborador
+                )
+                print(f'  ✅ Colaborador: {colaborador.nombre} {colaborador.apellido}')
+        
+        print('='*70)
+        print('✅ TRAZABILIDAD ACTUALIZADA EXITOSAMENTE')
+        print('='*70 + '\n')
+        
+        return instance

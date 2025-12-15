@@ -50,13 +50,13 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
       base: const Color.fromARGB(255, 251, 239, 233),
       borderTurno: const Color.fromARGB(255, 204, 78, 0),
       textTurno: Colors.white,
-      textProducto: const Color.fromARGB(255, 140, 28, 66),
+      textProducto: const Color.fromARGB(255, 0, 89, 79),
     ),
     'Noche': (
       base: const Color.fromARGB(255, 251, 239, 233), 
-      borderTurno: const Color.fromARGB(255, 140, 28, 66),
-      textTurno: const Color(0xFF2196F3),
-      textProducto: Colors.black,
+      borderTurno: const Color.fromARGB(255, 0, 89, 79),
+      textTurno: Colors.white,
+      textProducto: const Color.fromARGB(255, 0, 89, 79),
     ),
   };
 

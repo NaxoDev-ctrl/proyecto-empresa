@@ -29,6 +29,8 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   String? _productoSeleccionado;
   String? _productoNombreSeleccionado;
 
+  final TextEditingController _julianoController = TextEditingController();
+
   // ========== DATOS PARA DROPDOWNS ==========
   List<Map<String, dynamic>> _turnos = [];
   List<Map<String, dynamic>> _lineas = [];
@@ -39,7 +41,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   @override
   void initState() {
     super.initState();
-    _fechaSeleccionada = DateTime.now(); 
     _inicializar();
   }
 
@@ -152,6 +153,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       _lineaSeleccionada = null;
       _productoSeleccionado = null;
       _productoNombreSeleccionado = null;
+      _julianoController.clear();
     });
     _cargarTrazabilidades();
   }
@@ -225,6 +227,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   // ========== UI: SELECTOR DE JULIANO ==========
   Widget _buildSelectorJuliano() {
     return TextField(
+      controller: _julianoController,
       decoration: InputDecoration(
         labelText: 'Día Juliano (001-366)',
         hintText: 'Ej: 345, 001, 200',
@@ -235,6 +238,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                 onPressed: () {
                   setState(() {
                     _julianoFiltro = null;
+                    _julianoController.clear();
                   });
                   _cargarTrazabilidades();
                 },

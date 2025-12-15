@@ -927,6 +927,18 @@ class Trazabilidad(models.Model):
             self.firmas.filter(tipo_firma='supervisor').exists() and
             self.firmas.filter(tipo_firma='control_calidad').exists()
         )
+    def save(self, *args, **kwargs):
+        """
+        Sobrescribir save para asegurar que juliano nunca cambia después de creación
+        """
+        # Si ya existe (UPDATE), preservar juliano original
+        if self.pk:
+            original = Trazabilidad.objects.get(pk=self.pk)
+            if original.juliano and self.juliano != original.juliano:
+                print(f'⚠️  Intentando cambiar juliano de {original.juliano} a {self.juliano} - REVERTIDO')
+                self.juliano = original.juliano
+        
+        super().save(*args, **kwargs)
 
 # ============================================================================
 # MODELO: TrazabilidadMateriaPrima

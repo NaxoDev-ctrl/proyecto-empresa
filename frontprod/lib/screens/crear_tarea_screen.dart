@@ -256,7 +256,12 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nueva Tarea'),
+        toolbarHeight: 70, 
+        title: const Text('Nueva Tarea',
+          style: TextStyle(
+            fontSize: 28,
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {

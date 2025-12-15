@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import 'dart:io';
 
+const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 class DetalleTrazabilidadSupervisorScreen extends StatefulWidget {
   final int trazabilidadId;
 
@@ -200,6 +201,12 @@ class _DetalleTrazabilidadSupervisorScreenState
           _reprocesoControllers[codigo] = TextEditingController(
             text: totalReproceso.toString()
           );
+
+          final mermas = mp['mermas'] as List? ?? [];
+          _mermasData[codigo] = mermas.map((m) => {
+            'cantidad': _convertirADouble(m['cantidad']),
+            'causas': m['causas'].toString(),
+          }).toList();
 
           final totalMerma = _mermasData[codigo]!.isEmpty 
               ? 0.0 
@@ -1813,7 +1820,12 @@ class _DetalleTrazabilidadSupervisorScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Detalle de Trazabilidad'),
+        toolbarHeight: 70, 
+        title: Text('Detalle de Trazabilidad',
+          style: TextStyle(
+            fontSize: 28,
+          ),
+        ),
         actions: [
           if (!tieneFirmaSupervisor)
             IconButton(
@@ -1835,6 +1847,7 @@ class _DetalleTrazabilidadSupervisorScreenState
             tooltip: 'Actualizar',
           ),
         ],
+        backgroundColor: primaryColorDark,
       ),
       body: RefreshIndicator(
         onRefresh: _cargarTrazabilidad,

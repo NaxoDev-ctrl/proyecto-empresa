@@ -1017,160 +1017,67 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         """
-        Actualizar trazabilidad completa, con soporte para foto
+        Actualizar trazabilidad usando el serializer (que maneja reprocesos/mermas)
         """
-        trazabilidad = self.get_object()
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
         
         print('\n' + '='*80)
-        print('🔧 INICIANDO UPDATE DE TRAZABILIDAD')
+        print('🔧 UPDATE DE TRAZABILIDAD - USANDO SERIALIZER')
         print('='*80)
-        print(f'📦 Request data: {request.data}')
-        print(f'📦 Request FILES: {request.FILES}')
-        print(f'📦 Content-Type: {request.content_type}')
+        print(f'Trazabilidad ID: {instance.id}')
+        print(f'Content-Type: {request.content_type}')
+        print(f'Partial: {partial}')
+        
+        # 🔍 LOG DE DATOS RECIBIDOS
+        print('\n📦 DATOS RECIBIDOS:')
+        for key, value in request.data.items():
+            if isinstance(value, list):
+                print(f'  {key}: [{len(value)} elementos]')
+                if value:
+                    print(f'    Primer elemento: {value[0]}')
+            elif isinstance(value, str) and len(str(value)) > 100:
+                print(f'  {key}: {str(value)[:100]}...')
+            else:
+                print(f'  {key}: {value}')
         
         # Verificar que no esté firmada por supervisor
-        if trazabilidad.firmas.filter(tipo_firma='supervisor').exists():
+        if instance.firmas.filter(tipo_firma='supervisor').exists():
             return Response(
                 {'error': 'No se puede editar una trazabilidad ya firmada por el supervisor'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Usar el serializer para validar y actualizar
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        
+        # 🔍 VALIDACIÓN CON LOGGING DETALLADO
         try:
-            with transaction.atomic():
-                print('📝 Actualizando trazabilidad...')
-                
-                # Determinar si viene como multipart o JSON
-                es_multipart = 'multipart' in request.content_type
-                
-                if es_multipart:
-                    print('📷 Request multipart detectado (con foto)')
-                    # Parsear campos JSON que vienen como strings
-                    try:
-                        materias_primas = json.loads(request.data.get('materias_primas', '[]'))
-                        reprocesos_data = json.loads(request.data.get('reprocesos_data', '[]'))
-                        mermas_data = json.loads(request.data.get('mermas_data', '[]'))
-                        colaboradores_codigos = json.loads(request.data.get('colaboradores_codigos', '[]'))
-                    except json.JSONDecodeError as e:
-                        print(f'❌ Error al parsear JSON: {e}')
-                        raise Exception(f'Error al parsear datos JSON: {e}')
-                    
-                    # Obtener campos simples
-                    cantidad_producida = request.data.get('cantidad_producida')
-                    observaciones = request.data.get('observaciones', '')
-                    
-                else:
-                    print('📄 Request JSON normal (sin foto)')
-                    # Datos vienen en request.data como dict
-                    materias_primas = request.data.get('materias_primas', [])
-                    reprocesos_data = request.data.get('reprocesos_data', [])
-                    mermas_data = request.data.get('mermas_data', [])
-                    colaboradores_codigos = request.data.get('colaboradores_codigos', [])
-                    cantidad_producida = request.data.get('cantidad_producida')
-                    observaciones = request.data.get('observaciones', '')
-                
-                # ==================== CAMPOS BÁSICOS ====================
-                if cantidad_producida is not None:
-                    trazabilidad.cantidad_producida = int(cantidad_producida)
-                    print(f'✅ Cantidad producida: {trazabilidad.cantidad_producida}')
-                
-                trazabilidad.observaciones = observaciones
-                print(f'✅ Observaciones: {trazabilidad.observaciones}')
-                
-                # ==================== FOTO ====================
-                if 'foto_etiquetas' in request.FILES:
-                    trazabilidad.foto_etiquetas = request.FILES['foto_etiquetas']
-                    print(f'✅ Nueva foto guardada: {trazabilidad.foto_etiquetas.name}')
-                
-                trazabilidad.save()
-                
-                # ==================== MATERIAS PRIMAS ====================
-                if materias_primas:
-                    print(f'🧪 Actualizando materias primas: {len(materias_primas)}')
-                    trazabilidad.materias_primas_usadas.all().delete()
-                    
-                    for mp_data in materias_primas:
-                        materia_prima = MateriaPrima.objects.get(
-                            codigo=mp_data['materia_prima_id']
-                        )
-                        
-                        mp_usada = TrazabilidadMateriaPrima.objects.create(
-                            trazabilidad=trazabilidad,
-                            materia_prima=materia_prima,
-                            lote=mp_data.get('lote'),
-                            cantidad_usada=mp_data['cantidad_usada'],
-                            unidad_medida=mp_data.get('unidad_medida', 'kg')
-                        )
-                        print(f'  ✅ MP: {materia_prima.nombre} - {mp_data["cantidad_usada"]}')
-                
-                # ==================== REPROCESOS ====================
-                if 'reprocesos' in mp_data and mp_data['reprocesos']:
-                    for reproceso_data in mp_data['reprocesos']:
-                        Reproceso.objects.create(
-                            trazabilidad_materia_prima=mp_usada,
-                            cantidad=float(reproceso_data['cantidad']),
-                            causas=reproceso_data['causas']
-                        )
-                        print(f'    ♻️ Reproceso: {reproceso_data["cantidad"]} - {reproceso_data["causas"]}')
-                
-                # ==================== MERMAS ====================
-                if 'mermas' in mp_data and mp_data['mermas']:
-                    for merma_data in mp_data['mermas']:
-                        Merma.objects.create(
-                            trazabilidad_materia_prima=mp_usada,
-                            cantidad=float(merma_data['cantidad']),
-                            causas=merma_data['causas']
-                        )
-                        print(f'    🗑️ Merma: {merma_data["cantidad"]} - {merma_data["causas"]}')
-                
-
-                # Actualizar lote si viene nuevo código de colaborador
-                if 'codigo_colaborador_lote':
-                    codigo_colaborador = ['codigo_colaborador_lote']
-                    if codigo_colaborador and trazabilidad.lote:
-                        # El lote tiene formato: CODIGO_PRODUCTO-JULIANO-CODIGO_COLABORADOR
-                        partes_lote = trazabilidad.lote.split('-')
-                        if len(partes_lote) == 3:
-                            # Reconstruir lote con nuevo código
-                            nuevo_lote = f"{partes_lote[0]}-{partes_lote[1]}-{codigo_colaborador}"
-                            trazabilidad.lote = nuevo_lote
-                # ==================== COLABORADORES ====================
-                if colaboradores_codigos:                    
-                    TrazabilidadColaborador.objects.filter(trazabilidad=trazabilidad).delete()
-                    
-                    for codigo in colaboradores_codigos:
-                        try:
-                            colaborador = Colaborador.objects.get(codigo=codigo)
-                            TrazabilidadColaborador.objects.create(
-                                trazabilidad=trazabilidad,
-                                colaborador=colaborador
-                            )
-                            print(f'  Colaborador agregado: {colaborador.nombre} {colaborador.apellido} (código: {codigo})')
-                        except Colaborador.DoesNotExist:
-                            print(f'  Colaborador con código {codigo} no encontrado - IGNORADO')
-                            continue
-            
-                    
-                    print('✅ Colaboradores guardados')
-                
-                print('\n✅ Trazabilidad actualizada exitosamente')
-                print('='*80 + '\n')
-                
-                # Retornar la trazabilidad actualizada
-                serializer = self.get_serializer(trazabilidad)
-                return Response(serializer.data)
-                
+            serializer.is_valid(raise_exception=True)
         except Exception as e:
-            print('\n' + '='*80)
-            print('❌❌❌ ERROR GENERAL EN UPDATE ❌❌❌')
-            print('='*80)
-            import traceback
-            print(traceback.format_exc())
-            print('='*80 + '\n')
+            print('\n' + '❌'*40)
+            print('ERROR DE VALIDACIÓN EN SERIALIZER')
+            print('❌'*40)
+            print(f'Tipo de error: {type(e).__name__}')
+            print(f'Mensaje: {str(e)}')
             
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            if hasattr(serializer, 'errors'):
+                print('\n🔍 ERRORES DEL SERIALIZER:')
+                import json
+                print(json.dumps(serializer.errors, indent=2, default=str))
+            
+            print('❌'*40 + '\n')
+            raise  # Re-lanzar para que DRF maneje la respuesta
+        
+        self.perform_update(serializer)
+        
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        
+        print('✅ Trazabilidad actualizada exitosamente vía serializer')
+        print('='*80 + '\n')
+        
+        return Response(serializer.data)
 # ============================================================================
 # VIEWSET: Firmas de Trazabilidad
 # ============================================================================

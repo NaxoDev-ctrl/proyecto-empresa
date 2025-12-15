@@ -1086,8 +1086,6 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                 # ==================== MATERIAS PRIMAS ====================
                 if materias_primas:
                     print(f'🧪 Actualizando materias primas: {len(materias_primas)}')
-                    from .models import MateriaPrima, TrazabilidadMateriaPrima
-                    
                     trazabilidad.materias_primas_usadas.all().delete()
                     
                     for mp_data in materias_primas:
@@ -1095,7 +1093,7 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                             codigo=mp_data['materia_prima_id']
                         )
                         
-                        TrazabilidadMateriaPrima.objects.create(
+                        mp_usada = TrazabilidadMateriaPrima.objects.create(
                             trazabilidad=trazabilidad,
                             materia_prima=materia_prima,
                             lote=mp_data.get('lote'),
@@ -1105,40 +1103,38 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                         print(f'  ✅ MP: {materia_prima.nombre} - {mp_data["cantidad_usada"]}')
                 
                 # ==================== REPROCESOS ====================
-                if reprocesos_data:
-                    print(f'♻️ Actualizando reprocesos: {len(reprocesos_data)}')
-                    from .models import Reproceso
-                    
-                    trazabilidad.reprocesos.all().delete()
-                    
-                    for reproceso_data in reprocesos_data:
+                if 'reprocesos' in mp_data and mp_data['reprocesos']:
+                    for reproceso_data in mp_data['reprocesos']:
                         Reproceso.objects.create(
-                            trazabilidad=trazabilidad,
-                            cantidad_kg=reproceso_data['cantidad_kg'],
-                            descripcion=reproceso_data.get('descripcion', '')
+                            trazabilidad_materia_prima=mp_usada,
+                            cantidad=float(reproceso_data['cantidad']),
+                            causas=reproceso_data['causas']
                         )
-                        print(f'  ✅ Reproceso: {reproceso_data["cantidad_kg"]} kg')
+                        print(f'    ♻️ Reproceso: {reproceso_data["cantidad"]} - {reproceso_data["causas"]}')
                 
                 # ==================== MERMAS ====================
-                if mermas_data:
-                    print(f'🗑️ Actualizando mermas: {len(mermas_data)}')
-                    from .models import Merma
-                    
-                    trazabilidad.mermas.all().delete()
-                    
-                    for merma_data in mermas_data:
+                if 'mermas' in mp_data and mp_data['mermas']:
+                    for merma_data in mp_data['mermas']:
                         Merma.objects.create(
-                            trazabilidad=trazabilidad,
-                            cantidad_kg=merma_data['cantidad_kg'],
-                            descripcion=merma_data.get('descripcion', '')
+                            trazabilidad_materia_prima=mp_usada,
+                            cantidad=float(merma_data['cantidad']),
+                            causas=merma_data['causas']
                         )
-                        print(f'  ✅ Merma: {merma_data["cantidad_kg"]} kg')
+                        print(f'    🗑️ Merma: {merma_data["cantidad"]} - {merma_data["causas"]}')
                 
+
+                # Actualizar lote si viene nuevo código de colaborador
+                if 'codigo_colaborador_lote':
+                    codigo_colaborador = ['codigo_colaborador_lote']
+                    if codigo_colaborador and trazabilidad.lote:
+                        # El lote tiene formato: CODIGO_PRODUCTO-JULIANO-CODIGO_COLABORADOR
+                        partes_lote = trazabilidad.lote.split('-')
+                        if len(partes_lote) == 3:
+                            # Reconstruir lote con nuevo código
+                            nuevo_lote = f"{partes_lote[0]}-{partes_lote[1]}-{codigo_colaborador}"
+                            trazabilidad.lote = nuevo_lote
                 # ==================== COLABORADORES ====================
-                if colaboradores_codigos:
-                    print(f'\n Actualizando colaboradores: {colaboradores_codigos}')
-                    from .models import Colaborador
-                    
+                if colaboradores_codigos:                    
                     TrazabilidadColaborador.objects.filter(trazabilidad=trazabilidad).delete()
                     
                     for codigo in colaboradores_codigos:

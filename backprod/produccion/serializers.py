@@ -998,8 +998,6 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         
         # ==================== COLABORADORES ====================
-        # colaboradores_reales es un RelatedManager que apunta a TrazabilidadColaborador
-        # Necesitamos obtener los colaboradores desde el modelo intermedio
         
         print(f'\n👥 Serializando colaboradores de trazabilidad {instance.id}')
         
@@ -1018,7 +1016,7 @@ class TrazabilidadDetailSerializer(serializers.ModelSerializer):
                     'codigo': colaborador.codigo,
                     'nombre': colaborador.nombre,
                     'apellido': colaborador.apellido,
-                    'colaborador': {  # Estructura anidada por si la app la espera
+                    'colaborador': {
                         'codigo': colaborador.codigo,
                         'nombre': colaborador.nombre,
                         'apellido': colaborador.apellido
@@ -1361,7 +1359,7 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
             try:
                 materia_prima = MateriaPrima.objects.get(codigo=mp_data['materia_prima_id'])
                 
-                TrazabilidadMateriaPrima.objects.create(
+                mp_usada = TrazabilidadMateriaPrima.objects.create(
                     trazabilidad=trazabilidad,
                     materia_prima=materia_prima,
                     lote=mp_data.get('lote'),
@@ -1369,35 +1367,47 @@ class TrazabilidadCreateUpdateSerializer(serializers.ModelSerializer):
                     unidad_medida=mp_data['unidad_medida']
                 )
                 print(f'  ✅ MP {i+1}: {materia_prima.nombre}')
+        
+                # Crear reprocesos
+                if 'reprocesos' in mp_data and mp_data['reprocesos']:
+                    print(f'    🔍 Procesando reprocesos para {materia_prima.nombre}...')
+                    
+                    for j, reproceso_data in enumerate(mp_data['reprocesos']):
+                        try:
+                            Reproceso.objects.create(
+                                trazabilidad_materia_prima=mp_usada,
+                                cantidad=float(reproceso_data['cantidad']),
+                                causas=reproceso_data['causas']
+                            )
+                            print(f'      ✅ Reproceso {j+1}: {reproceso_data["cantidad"]} - {reproceso_data["causas"]}')
+                        except Exception as e:
+                            print(f'      ❌ Error al crear reproceso {j+1}: {e}')
+                else:
+                    print(f'    ℹ️  Sin reprocesos para {materia_prima.nombre}')
                 
+                # Crear mermas
+                if 'mermas' in mp_data and mp_data['mermas']:
+                    print(f'    🔍 Procesando mermas para {materia_prima.nombre}...')
+                    
+                    for j, merma_data in enumerate(mp_data['mermas']):
+                        try:
+                            Merma.objects.create(
+                                trazabilidad_materia_prima=mp_usada,
+                                cantidad=float(merma_data['cantidad']),
+                                causas=merma_data['causas']
+                            )
+                            print(f'      ✅ Merma {j+1}: {merma_data["cantidad"]} - {merma_data["causas"]}')
+                        except Exception as e:
+                            print(f'      ❌ Error al crear merma {j+1}: {e}')
+                else:
+                    print(f'    ℹ️  Sin mermas para {materia_prima.nombre}')
+
             except MateriaPrima.DoesNotExist:
                 print(f'  ❌ MP {i+1}: No encontrada {mp_data.get("materia_prima_id")}')
             except Exception as e:
-                print(f'  ❌ MP {i+1}: Error {e}')
-        
-        # Crear reprocesos
-        for i, reproceso_data in enumerate(reprocesos_data):
-            try:
-                Reproceso.objects.create(
-                    trazabilidad_materia_prima=TrazabilidadMateriaPrima,
-                    cantidad=float(reproceso_data['cantidad']),
-                    causas=reproceso_data['causas']
-                )
-                print(f'  ✅ Reproceso {i+1}')
-            except Exception as e:
-                print(f'  ❌ Reproceso {i+1}: {e}')
-        
-        # Crear mermas
-        for i, merma_data in enumerate(mermas_data):
-            try:
-                Merma.objects.create(
-                    trazabilidad_materia_prima=TrazabilidadMateriaPrima,
-                    cantidad=float(merma_data['cantidad']),
-                    causas=merma_data['causas']
-                )
-                print(f'  ✅ Merma {i+1}')
-            except Exception as e:
-                print(f'  ❌ Merma {i+1}: {e}')
+                print(f'  ❌ MP {i+1}: Error general: {e}')
+                import traceback
+                traceback.print_exc()
 
         # Crear colaboradores
         for colaborador_codigo in colaboradores_codigos:

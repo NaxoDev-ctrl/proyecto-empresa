@@ -34,33 +34,28 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
 
   final Map<String, ({Color base, Color borderTurno, Color textTurno, Color textProducto})> _turnoSkin = {
     'AM': (
-      // Base: Amarillo pálido (similar a la imagen)
-      base: const Color.fromARGB(255, 255, 249, 221), 
-      // Turno Border/Background: Amarillo/Dorado
+      base: const Color.fromARGB(255, 251, 239, 233), 
       borderTurno: const Color.fromARGB(255, 255, 222, 89),
-      // Turno Text: Blanco
       textTurno: Colors.white,
-      // Producto Text: Dark Teal (color corporativo)
       textProducto: const Color.fromARGB(255, 0, 89, 79),
     ),
-    'PM': (
-      // Base: Durazno pálido (similar a la imagen)
-      base: const Color.fromARGB(255, 255, 215, 179),
-      // Turno Border/Background: Naranja oscuro
-      borderTurno: const Color.fromARGB(255, 204, 78, 0),
-      // Turno Text: Blanco
+    'Jornada': (
+      base: const Color.fromARGB(255, 251, 239, 233), 
+      borderTurno: const Color.fromARGB(255, 255, 145, 0),
       textTurno: Colors.white,
-      // Producto Text: Granate/Vino
+      textProducto: const Color.fromARGB(255, 0, 89, 79),
+    ),
+
+    'PM': (
+      base: const Color.fromARGB(255, 251, 239, 233),
+      borderTurno: const Color.fromARGB(255, 204, 78, 0),
+      textTurno: Colors.white,
       textProducto: const Color.fromARGB(255, 140, 28, 66),
     ),
     'Noche': (
-      // Base: Azul muy pálido (ejemplo)
-      base: const Color(0xFFE3F2FD), 
-      // Turno Border/Background: Rojo Oscuro
-      borderTurno: const Color(0xFF891D43),
-      // Turno Text: Azul
+      base: const Color.fromARGB(255, 251, 239, 233), 
+      borderTurno: const Color.fromARGB(255, 140, 28, 66),
       textTurno: const Color(0xFF2196F3),
-      // Producto Text: Negro
       textProducto: Colors.black,
     ),
   };
@@ -351,6 +346,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
 
   Widget _buildTareaCard(Tarea tarea) {
     final skin = _getTurnoSkin(tarea.turnoNombre);
+    final estadoColor = _getEstadoColor(tarea.estado);
     final isFinalized = tarea.estado != 'pendiente';
     
     return Card(
@@ -420,6 +416,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
                       decoration: BoxDecoration(
                         color: _getEstadoColor(tarea.estado).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: estadoColor, width: 1.5),
                       ),
                       child: Text(
                         tarea.estadoDisplay,

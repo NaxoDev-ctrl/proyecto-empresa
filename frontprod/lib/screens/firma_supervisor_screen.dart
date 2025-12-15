@@ -39,6 +39,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   @override
   void initState() {
     super.initState();
+    _fechaSeleccionada = DateTime.now(); 
     _inicializar();
   }
 
@@ -47,6 +48,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
     await _cargarTurnos();
     await _cargarLineas();
     await _cargarProductos();
+    await _cargarTrazabilidades();
     await _cargarTrazabilidades();
   }
 
@@ -144,7 +146,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   // ========== LIMPIAR FILTROS ==========
   void _limpiarFiltros() {
     setState(() {
-      _fechaSeleccionada = null;
+      _fechaSeleccionada = DateTime.now();
       _julianoFiltro = null; 
       _turnoSeleccionado = null;
       _lineaSeleccionada = null;

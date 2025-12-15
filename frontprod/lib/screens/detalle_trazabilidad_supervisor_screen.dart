@@ -69,7 +69,32 @@ class _DetalleTrazabilidadSupervisorScreenState
   void initState() {
     super.initState();
     _cargarTrazabilidad();
+    _codigoColaboradorLoteController.addListener(_actualizarLoteEnPantalla);
   }
+
+  @override
+  void _actualizarLoteEnPantalla() {
+  if (_tarea == null || _trazabilidad == null) return;
+  
+  // No actualizar si no estamos en modo edición
+  if (!_modoEdicion) return;
+  
+  final producto = _tarea!['producto_detalle'] ?? _tarea!['producto'];
+  if (producto == null) return;
+  
+  final codigoProducto = producto['codigo'];
+  final juliano = _trazabilidad!['juliano'];
+  final codigoColaborador = _codigoColaboradorLoteController.text.trim();
+  
+  // Generar nuevo lote
+  final nuevoLote = '$codigoProducto-$juliano-$codigoColaborador';
+  
+  // Forzar rebuild del widget para mostrar el nuevo lote
+  setState(() {
+    // El lote se mostrará automáticamente porque usamos
+    // el valor del controller y el juliano de _trazabilidad
+  });
+}
 
   @override
   void dispose() {
@@ -239,7 +264,7 @@ class _DetalleTrazabilidadSupervisorScreenState
         }
       });
 
-    } catch (e, stackTrace) {
+    } catch (e) {
       setState(() {
         _error = 'Error al cargar trazabilidad: $e';
       });
@@ -392,25 +417,40 @@ class _DetalleTrazabilidadSupervisorScreenState
         };
 
         final reprocesoData = _reprocesosData[codigo];
-        if (reprocesoData != null && reprocesoData['cantidad'] > 0) {
+        if (reprocesoData != null && 
+            reprocesoData['cantidad'] != null && 
+            reprocesoData['cantidad'] is num &&
+            (reprocesoData['cantidad'] as num) > 0) {
+        
+          final cantidadReproceso = reprocesoData['cantidad'] is double 
+              ? reprocesoData['cantidad'] 
+              : double.parse(reprocesoData['cantidad'].toString());
+          
           mpData['reprocesos'] = [
             {
-              'cantidad': reprocesoData['cantidad'],
-              'causas': reprocesoData['causas'],
+              'cantidad': cantidadReproceso,
+              'causas': reprocesoData['causas']?.toString() ?? '',
             }
           ];
         }
 
         final mermaData = _mermasData[codigo];
-        if (mermaData != null && mermaData['cantidad'] > 0) {
+        if (mermaData != null && 
+            mermaData['cantidad'] != null && 
+            mermaData['cantidad'] is num &&
+            (mermaData['cantidad'] as num) > 0) {
+          
+          final cantidadMerma = mermaData['cantidad'] is double 
+              ? mermaData['cantidad'] 
+              : double.parse(mermaData['cantidad'].toString());
+          
           mpData['mermas'] = [
             {
-              'cantidad': mermaData['cantidad'],
-              'causas': mermaData['causas'],
+              'cantidad': cantidadMerma,
+              'causas': mermaData['causas']?.toString() ?? '',
             }
           ];
         }
-
         materiasPrimasData.add(mpData);
       }
 
@@ -884,7 +924,9 @@ class _DetalleTrazabilidadSupervisorScreenState
                     border: Border.all(color: Colors.blue, width: 2),
                   ),
                   child: Text(
-                    lote?.toString() ?? 'Sin lote',
+                    _modoEdicion && tieneFirmaSupervisor == false
+                        ? '${producto['codigo']}-$juliano-${_codigoColaboradorLoteController.text.trim()}'
+                        : (lote?.toString() ?? 'Sin lote'),
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,

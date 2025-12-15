@@ -459,42 +459,80 @@ class EventoProcesoAdmin(admin.ModelAdmin):
 # ADMIN: TrazabilidadMateriaPrima (Inline para Trazabilidad)
 # ============================================================================
 class TrazabilidadMateriaPrimaInline(admin.TabularInline):
-    """
-    Permite ver las materias primas usadas desde la trazabilidad.
-    """
     model = TrazabilidadMateriaPrima
     extra = 0
-    fields = ['materia_prima', 'lote', 'cantidad_usada', 'unidad_medida']
+    fields = [
+        'materia_prima', 
+        'lote', 
+        'cantidad_usada', 
+        'unidad_medida',
+        'get_reprocesos_count',
+        'get_mermas_count',
+    ]
+    readonly_fields = ['get_reprocesos_count', 'get_mermas_count']
+    
+    def get_reprocesos_count(self, obj):
+        if obj.pk:
+            count = obj.reprocesos.count()
+            if count > 0:
+                total = sum(r.cantidad for r in obj.reprocesos.all())
+                return format_html(
+                    '<span style="color: orange; font-weight: bold;">♻️ {} ({} total)</span>',
+                    count,
+                    total
+                )
+            return '-'
+        return '-'
+    get_reprocesos_count.short_description = 'Reprocesos'
+    
+    def get_mermas_count(self, obj):
+        if obj.pk:
+            count = obj.mermas.count()
+            if count > 0:
+                total = sum(m.cantidad for m in obj.mermas.all())
+                return format_html(
+                    '<span style="color: red; font-weight: bold;">🗑️ {} ({} total)</span>',
+                    count,
+                    total
+                )
+            return '-'
+        return '-'
+    get_mermas_count.short_description = 'Mermas'
 
 
 # ============================================================================
 # ADMIN: Reproceso (Inline para Trazabilidad)
 # ============================================================================
 class ReprocesoInline(admin.TabularInline):
-    """
-    Permite agregar reprocesos desde la trazabilidad.
-    """
     model = Reproceso
     extra = 0
-    fields = ['cantidad', 'causas']
-
-    verbose_name = 'Reproceso de esta materia prima'
-    verbose_name_plural = 'Reprocesos'
-
+    fields = ['cantidad', 'causas', 'get_causas_display']
+    readonly_fields = ['get_causas_display']
+    
+    def get_causas_display(self, obj):
+        if obj.causas:
+            if obj.causas.startswith('otro:'):
+                return f"Otro: {obj.causas.split(':', 1)[1]}"
+            return obj.get_causas_display()
+        return '-'
+    get_causas_display.short_description = 'Causa (legible)'
 
 # ============================================================================
 # ADMIN: Merma (Inline para Trazabilidad)
 # ============================================================================
 class MermaInline(admin.TabularInline):
-    """
-    Permite agregar mermas desde la trazabilidad.
-    """
     model = Merma
     extra = 0
-    fields = ['cantidad', 'causas']
-
-    verbose_name = 'Merma de esta materia prima'
-    verbose_name_plural = 'Mermas'
+    fields = ['cantidad', 'causas', 'get_causas_display']
+    readonly_fields = ['get_causas_display']
+    
+    def get_causas_display(self, obj):
+        if obj.causas:
+            if obj.causas.startswith('otro:'):
+                return f"Otro: {obj.causas.split(':', 1)[1]}"
+            return obj.get_causas_display()
+        return '-'
+    get_causas_display.short_description = 'Causa (legible)'
 
 
 # ============================================================================
@@ -687,53 +725,44 @@ class FirmaTrazabilidadAdmin(admin.ModelAdmin):
 @admin.register(TrazabilidadMateriaPrima)
 class TrazabilidadMateriaPrimaAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
         'trazabilidad',
         'materia_prima',
         'lote',
         'cantidad_usada',
         'unidad_medida',
-        'count_reprocesos',
-        'count_mermas'
+        'get_reprocesos_info',
+        'get_mermas_info',
     ]
-    
-    list_filter = [
-        'materia_prima',
-        'unidad_medida',
-        'trazabilidad__estado'
-    ]
-    
-    search_fields = [
-        'trazabilidad__lote',
-        'materia_prima__nombre',
-        'lote'
-    ]
-    
-    fieldsets = (
-        ('Información Básica', {
-            'fields': ('trazabilidad', 'materia_prima', 'lote')
-        }),
-        ('Cantidades', {
-            'fields': ('cantidad_usada', 'unidad_medida')
-        }),
-    )
-    
+    list_filter = ['trazabilidad', 'materia_prima']
+    search_fields = ['materia_prima__nombre', 'lote']
     inlines = [ReprocesoInline, MermaInline]
     
-    def count_reprocesos(self, obj):
-        """Muestra cantidad de reprocesos"""
+    def get_reprocesos_info(self, obj):
         count = obj.reprocesos.count()
-        if count == 0:
-            return '—'
-        return f'♻️ {count}'
-    count_reprocesos.short_description = 'Reprocesos'
+        if count > 0:
+            total = sum(r.cantidad for r in obj.reprocesos.all())
+            return format_html(
+                '<span style="color: orange; font-weight: bold;">♻️ {} reprocesos ({} {})</span>',
+                count,
+                total,
+                obj.unidad_medida
+            )
+        return '-'
+    get_reprocesos_info.short_description = 'Reprocesos'
     
-    def count_mermas(self, obj):
-        """Muestra cantidad de mermas"""
+    def get_mermas_info(self, obj):
         count = obj.mermas.count()
-        if count == 0:
-            return '—'
-        return f'🗑️ {count}'
-    count_mermas.short_description = 'Mermas'
+        if count > 0:
+            total = sum(m.cantidad for m in obj.mermas.all())
+            return format_html(
+                '<span style="color: red; font-weight: bold;">🗑️ {} mermas ({} {})</span>',
+                count,
+                total,
+                obj.unidad_medida
+            )
+        return '-'
+    get_mermas_info.short_description = 'Mermas'
 
 # ============================================================================
 # ADMIN: Reproceso
@@ -741,50 +770,35 @@ class TrazabilidadMateriaPrimaAdmin(admin.ModelAdmin):
 @admin.register(Reproceso)
 class ReprocesoAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
         'get_trazabilidad',
         'get_materia_prima',
         'cantidad',
-        'get_unidad',
+        'get_causas_legible',
+    ]
+    list_filter = [
+        'trazabilidad_materia_prima__trazabilidad',
         'causas',
-        'causas_display',
     ]
-    
-    list_filter = ['causas', 'trazabilidad_materia_prima__materia_prima']
-    
     search_fields = [
-        'trazabilidad_materia_prima__trazabilidad__lote',
-        'trazabilidad_materia_prima__materia_prima__nombre'
+        'trazabilidad_materia_prima__materia_prima__nombre',
     ]
-    
-    fieldsets = (
-        ('Información del Reproceso', {
-            'fields': ('trazabilidad_materia_prima', 'cantidad', 'causas')
-        }),
-    )
     
     def get_trazabilidad(self, obj):
-        """Muestra el lote de la trazabilidad"""
-        return obj.trazabilidad_materia_prima.trazabilidad.lote
-    get_trazabilidad.short_description = 'Lote'
-    get_trazabilidad.admin_order_field = 'trazabilidad_materia_prima__trazabilidad__lote'
+        return f"Trazabilidad #{obj.trazabilidad_materia_prima.trazabilidad.id}"
+    get_trazabilidad.short_description = 'Trazabilidad'
     
     def get_materia_prima(self, obj):
-        """Muestra la materia prima"""
         return obj.trazabilidad_materia_prima.materia_prima.nombre
     get_materia_prima.short_description = 'Materia Prima'
-    get_materia_prima.admin_order_field = 'trazabilidad_materia_prima__materia_prima__nombre'
     
-    def get_unidad(self, obj):
-        """Muestra la unidad de medida"""
-        return obj.trazabilidad_materia_prima.get_unidad_display(
-            obj.trazabilidad_materia_prima.unidad_medida
-        )
-    get_unidad.short_description = 'UdM'
-
-    def causas_display(self, obj):
-        """Muestra la causa en formato legible"""
-        return obj.get_causas_display()
-    causas_display.short_description = 'Causa'
+    def get_causas_legible(self, obj):
+        if obj.causas:
+            if obj.causas.startswith('otro:'):
+                return f"Otro: {obj.causas.split(':', 1)[1]}"
+            return obj.get_causas_display()
+        return '-'
+    get_causas_legible.short_description = 'Causa'
 
 
 # ============================================================================
@@ -793,47 +807,32 @@ class ReprocesoAdmin(admin.ModelAdmin):
 @admin.register(Merma)
 class MermaAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
         'get_trazabilidad',
         'get_materia_prima',
         'cantidad',
-        'get_unidad',
+        'get_causas_legible',
+    ]
+    list_filter = [
+        'trazabilidad_materia_prima__trazabilidad',
         'causas',
-        'causas_display'
     ]
-    
-    list_filter = ['causas', 'trazabilidad_materia_prima__materia_prima']
-    
     search_fields = [
-        'trazabilidad_materia_prima__trazabilidad__lote',
-        'trazabilidad_materia_prima__materia_prima__nombre'
+        'trazabilidad_materia_prima__materia_prima__nombre',
     ]
-    
-    fieldsets = (
-        ('Información de la Merma', {
-            'fields': ('trazabilidad_materia_prima', 'cantidad', 'causas')
-        }),
-    )
     
     def get_trazabilidad(self, obj):
-        """Muestra el lote de la trazabilidad"""
-        return obj.trazabilidad_materia_prima.trazabilidad.lote
-    get_trazabilidad.short_description = 'Lote'
-    get_trazabilidad.admin_order_field = 'trazabilidad_materia_prima__trazabilidad__lote'
+        return f"Trazabilidad #{obj.trazabilidad_materia_prima.trazabilidad.id}"
+    get_trazabilidad.short_description = 'Trazabilidad'
     
     def get_materia_prima(self, obj):
-        """Muestra la materia prima"""
         return obj.trazabilidad_materia_prima.materia_prima.nombre
     get_materia_prima.short_description = 'Materia Prima'
-    get_materia_prima.admin_order_field = 'trazabilidad_materia_prima__materia_prima__nombre'
     
-    def get_unidad(self, obj):
-        """Muestra la unidad de medida"""
-        return obj.trazabilidad_materia_prima.get_unidad_display(
-            obj.trazabilidad_materia_prima.unidad_medida
-        )
-    get_unidad.short_description = 'UdM'
-    
-    def causas_display(self, obj):
-        """Muestra la causa en formato legible"""
-        return obj.get_causas_display()
-    causas_display.short_description = 'Causa'
+    def get_causas_legible(self, obj):
+        if obj.causas:
+            if obj.causas.startswith('otro:'):
+                return f"Otro: {obj.causas.split(':', 1)[1]}"
+            return obj.get_causas_display()
+        return '-'
+    get_causas_legible.short_description = 'Causa'

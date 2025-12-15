@@ -29,30 +29,38 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
   final Color _onPrimaryColor = const Color(0xFFFFD9C6);
 
   // Mapeo de colores por turno (manteniendo tu esquema original)
-  final Map<String, ({Color base, Color border, Color text, Color border_turno, Color text_turno, Color text_producto})> _turnoSkin = {
+  final Map<String, ({Color base, Color border, Color text, Color borderturno, Color textturno, Color textproducto})> _turnoSkin = {
     'AM': (
-      base: const Color.fromARGB(255, 255, 249, 221),
+      base: const Color.fromARGB(255, 251, 239, 233),
       border: const Color(0xFF4CAF50), 
       text: const Color(0xFF4CAF50),
-      border_turno: const Color.fromARGB(255, 255, 222, 89),
-      text_turno: const Color.fromARGB(255, 255, 255, 255),
-      text_producto: const Color.fromARGB(255, 0, 89, 79),
+      borderturno: const Color.fromARGB(255, 255, 222, 89),
+      textturno: const Color.fromARGB(255, 255, 255, 255),
+      textproducto: const Color.fromARGB(255, 0, 89, 79),
+    ),
+    'Jornada': (
+      base: const Color.fromARGB(255, 251, 239, 233),
+      border: const Color(0xFF4CAF50), 
+      text: const Color(0xFF4CAF50),
+      borderturno: const Color.fromARGB(255, 255, 145, 0),
+      textturno: const Color.fromARGB(255, 255, 255, 255),
+      textproducto: const Color.fromARGB(255, 0, 89, 79),
     ),
     'PM': (
-      base: const Color.fromARGB(255, 255, 215, 179),
+      base: const Color.fromARGB(255, 251, 239, 233),
       border: const Color(0xFF4CAF50), 
       text: const Color(0xFF4CAF50),
-      border_turno: const Color.fromARGB(255, 204, 78, 0),
-      text_turno: const Color.fromARGB(255, 255, 255, 255),
-      text_producto: const Color.fromARGB(255, 140, 28, 66),
+      borderturno: const Color.fromARGB(255, 204, 78, 0),
+      textturno: const Color.fromARGB(255, 255, 255, 255),
+      textproducto: const Color.fromARGB(255, 140, 28, 66),
     ),
     'Noche': (
-      base: const Color(0xFFE3F2FD), 
+      base: Color.fromARGB(255, 251, 239, 233), 
       border: const Color(0xFF2196F3),
       text: const Color(0xFF0D47A1),
-      border_turno: const Color(0xFF891D43),
-      text_turno: const Color(0xFF2196F3),
-      text_producto: const Color.fromARGB(255, 0, 0, 0),
+      borderturno: const Color.fromARGB(255, 140, 28, 66),
+      textturno: const Color(0xFF2196F3),
+      textproducto: const Color.fromARGB(255, 0, 0, 0),
     ),
   };
 
@@ -90,13 +98,12 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
       });
     }
   }
-  // ========================================================================
+
   Future<void> _manejarTarea(Tarea tarea) async {
     if (tarea.estado == 'pendiente') {
-      // Tarea nueva → Iniciar
       await _iniciarTarea(tarea);
     } else if (tarea.estado == 'en_curso') {
-      // Tarea en progreso → Retomar
+
       await _retomarTarea(tarea);
     }
   }
@@ -133,7 +140,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text('Turno: ${tarea.turnoNombre}'),
-                  Text('Meta: ${tarea.metaProduccion} unidades'),
+                  Text('Meta: ${tarea.metaProduccion} ${tarea.productoUnidadMedidaDisplay}'),
                 ],
               ),
             ),
@@ -626,24 +633,22 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
     final turnoStyle = _turnoSkin[tarea.turnoNombre] ?? _turnoSkin['AM']!;
     final estadoColor = _getEstadoColor(tarea.estado);
     final formatter = NumberFormat('#,##0', 'es_CL');
-    final metaDisplay = '${formatter.format(tarea.metaProduccion)} unidades';
-
-    // 🔥 DETERMINAR SI ES TAREA EN PROGRESO
+    final metaDisplay = '${formatter.format(tarea.metaProduccion)} ${tarea.productoUnidadMedidaDisplay}';
     final esEnProgreso = tarea.estado == 'en_curso';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
-      elevation: esEnProgreso ? 8 : 6, // 🔥 Más elevación si está en progreso
+      elevation: esEnProgreso ? 8 : 6,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: esEnProgreso 
-            ? BorderSide(color: Colors.blue, width: 3) // 🔥 Borde azul si está en progreso
+            ? BorderSide(color: Colors.blue, width: 3)
             : BorderSide.none,
       ),
       color: turnoStyle.base,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _manejarTarea(tarea), // 🔥 NUEVA FUNCIÓN
+        onTap: () => _manejarTarea(tarea),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -657,13 +662,13 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: turnoStyle.border_turno,
+                      color: turnoStyle.borderturno,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       tarea.turnoNombre,
                       style: TextStyle(
-                        color: turnoStyle.text_turno,
+                        color: turnoStyle.textturno,
                         fontWeight: FontWeight.w900,
                         fontSize: 12,
                       ),
@@ -671,7 +676,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   ),
                   const Spacer(),
                   
-                  // 🔥 BADGE DE ESTADO
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -710,7 +714,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: turnoStyle.text_producto,
+                  color: turnoStyle.textproducto,
                 ),
               ),
               const SizedBox(height: 4),
@@ -755,7 +759,6 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 🔥 BOTÓN DINÁMICO: Iniciar o Retomar
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -782,8 +785,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   ),
                 ),
               ),
-              
-              // 🔥 MENSAJE SI ESTÁ EN PROGRESO
+
               if (esEnProgreso) ...[
                 SizedBox(height: 8),
                 Container(

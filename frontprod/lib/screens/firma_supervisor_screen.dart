@@ -474,6 +474,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         return const SizedBox.shrink();
       }
 
+      final lote = trazabilidad['lote']?.toString() ?? '';
       final firmas = trazabilidad['firmas'] as List<dynamic>? ?? [];
 
       final tieneFirmaSupervisor = firmas.any(
@@ -492,10 +493,33 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
           ? firmas.firstWhere((firma) => firma is Map && firma['tipo_firma'] == 'control_calidad')
           : null;
 
-      
+      // Extraer nombres de firmantes
+      String? nombreFirmaSupervisor;
+      String? nombreFirmaCalidad;
+
+      if (firmaSupervisor != null && firmaSupervisor is Map) {
+        nombreFirmaSupervisor = firmaSupervisor['usuario_nombre']?.toString();
+      }
+
+      if (firmaCalidad != null && firmaCalidad is Map) {
+        nombreFirmaCalidad = firmaCalidad['usuario_nombre']?.toString();
+      }
+
+      // Formatear fecha de elaboración
+      String fechaElaboracion = '';
+      try {
+        final fechaCreacion = DateTime.parse(trazabilidad['fecha_creacion']);
+        fechaElaboracion = DateFormat('dd/MM/yy').format(fechaCreacion);
+      } catch (e) {
+        fechaElaboracion = 'N/A';
+      }       
 
       return Card(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: InkWell(
           onTap: () async {
             final resultado = await Navigator.push(
@@ -511,180 +535,236 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
               _cargarTrazabilidades();
             }
           },
+
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            producto['nombre']?.toString() ?? '',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Código: ${producto['codigo']?.toString() ?? ''}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
+                // ========== COLUMNA IZQUIERDA: Información ==========
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 1,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Column(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Fecha
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_today,
+                              size: 18,
+                              color: Color.fromARGB(255, 137, 29, 67),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              fechaElaboracion,
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[800],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 8),
+                        
+                        // Producto
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.inventory,
+                              size: 18,
+                              color: Color.fromARGB(255, 137, 29, 67),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '${producto['codigo']} - ${producto['nombre']}',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[800],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 8),
+                        
+                        // Lote
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.qr_code,
+                              size: 18,
+                              color: Color.fromARGB(255, 137, 29, 67),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              lote,
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[800],
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 8),
+                        
+                        // Línea
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.conveyor_belt,
+                              size: 18,
+                              color: Color.fromARGB(255, 137, 29, 67),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              linea['nombre']?.toString() ?? '',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(width: 20),
+              
+                // ========== COLUMNA DERECHA: Firmas ==========
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: tieneFirmaSupervisor ? Colors.green : Colors.orange,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                tieneFirmaSupervisor ? Icons.check_circle : Icons.pending,
-                                size: 16,
-                                color: Colors.white,
+                        // ========== FILA: Firma Producción + Cuadro ==========
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Firma producción',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[700],
+                                fontWeight: FontWeight.w500,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                tieneFirmaSupervisor ? 'Supervisor ✓' : 'Sin firmar',
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              width: 150,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: tieneFirmaSupervisor 
+                                    ? Colors.green 
+                                    : Colors.orange,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                tieneFirmaSupervisor
+                                    ? 'Firmado por\n${nombreFirmaSupervisor ?? 'Supervisor'}'
+                                    : 'Pendiente',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.3,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-
-                        const SizedBox(height: 6),
-
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: tieneFirmaCalidad 
-                                ? Colors.blue 
-                                : (tieneFirmaSupervisor ? Colors.grey : Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                tieneFirmaCalidad ? Icons.verified : Icons.hourglass_empty,
-                                size: 16,
-                                color: Colors.white,
+                        
+                        const Divider(height: 20, color: Color.fromARGB(255, 136, 136, 136)),
+                        
+                        // ========== FILA: Firma Calidad + Cuadro ==========
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Firma calidad',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[700],
+                                fontWeight: FontWeight.w500,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                tieneFirmaCalidad 
-                                    ? 'Calidad ✓' 
-                                    : (tieneFirmaSupervisor ? 'Pendiente' : 'N/A'),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              width: 150,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                                
+                              ),
+                              decoration: BoxDecoration(
+                                color: tieneFirmaCalidad 
+                                    ? _getColorEstado(trazabilidad['estado']?.toString())
+                                    : Colors.orange,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                tieneFirmaCalidad
+                                    ? '${_getTextoEstado(trazabilidad['estado']?.toString())} por\n${nombreFirmaCalidad ?? 'Control Calidad'}'
+                                    : 'Pendiente',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.3,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 9),
+                        
+                        // Texto "Ver detalle"
+                        Text(
+                          'Ver detalle',
+                          style: TextStyle(
+                            color: Theme.of(context).primaryColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            decoration: TextDecoration.underline,
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                Row(
-                  children: [
-                    Icon(Icons.factory, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      linea['nombre']?.toString() ?? '',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                    ),
-                    const SizedBox(width: 16),
-                    Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      turno['nombre']?.toString() ?? '',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Creada: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(trazabilidad['fecha_creacion']))}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                    ),
-                  ],
-                ),
-
-                if (tieneFirmaSupervisor || tieneFirmaCalidad) ...[
-                  const Divider(height: 24),
-                  
-                  // Firma de Supervisor
-                  if (tieneFirmaSupervisor && firmaSupervisor != null && firmaSupervisor is Map) ...[
-                    Row(
-                      children: [
-                        Icon(Icons.edit_note, size: 16, color: Colors.green[700]),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            'Firmada por ${firmaSupervisor['usuario_nombre']?.toString() ?? ''} el ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(firmaSupervisor['fecha_firma']))}',
-                            style: TextStyle(fontSize: 11, color: Colors.green[700]),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  
-                  // Firma de Control de Calidad
-                  if (tieneFirmaCalidad && firmaCalidad != null && firmaCalidad is Map) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.verified, size: 16, color: Colors.blue[700]),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            'Firmada por ${firmaCalidad['usuario_nombre']?.toString() ?? ''} el ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(firmaCalidad['fecha_firma']))}',
-                            style: TextStyle(fontSize: 11, color: Colors.blue[700]),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-
-                const SizedBox(height: 8),
-
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'Ver detalle',
-                    style: TextStyle(
-                      color: Theme.of(context).primaryColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -693,7 +773,9 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
           ),
         ),
       );
-    } catch (e) {
+    }
+    catch (e) {
+      print('Error al construir tarjeta de trazabilidad: $e');
       return const SizedBox.shrink();
     }
   }
@@ -784,6 +866,31 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         ),
       ),
     );
+  }
+  Color _getColorEstado(String? estado) {
+    switch (estado) {
+      case 'liberado':
+        return Colors.green;
+      case 'retenido':
+        return Colors.red;
+      case 'en_revision':
+      default:
+        return Colors.blue; // Azul para "en revisión"
+    }
+  }
+  
+  /// Obtiene el texto según el estado de la trazabilidad
+  String _getTextoEstado(String? estado) {
+    switch (estado) {
+      case 'liberado':
+        return 'Liberado';
+      case 'retenido':
+        return 'Retenido';
+      case 'en_revision':
+        return 'En revisión';
+      default:
+        return 'En revisión';
+    }
   }
 }
 

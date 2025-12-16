@@ -1112,7 +1112,8 @@ class Merma(models.Model):
         causa_display = self.get_causas_display()
         return f"Merma - {mp_nombre}: {self.cantidad} {udm} - {causa_display}"
 
-    # ============================================================================
+
+# ============================================================================
 # MODELO: FotoEtiqueta
 # ============================================================================
 class FotoEtiqueta(models.Model):
@@ -1212,7 +1213,6 @@ class FirmaTrazabilidad(models.Model):
 # ============================================================================
 # MODELO: TrazabilidadColaborador
 # ============================================================================
-
 class TrazabilidadColaborador(models.Model):
     """
     Registra los colaboradores que REALMENTE trabajaron en la producción.

@@ -969,7 +969,7 @@ class _DetalleTrazabilidadSupervisorScreenState
 
           SizedBox(
             width: double.infinity,
-            height: 40,
+            height: 50,
             child: OutlinedButton.icon(
               onPressed: () {
                 // Manejo robusto: puede ser int o Map

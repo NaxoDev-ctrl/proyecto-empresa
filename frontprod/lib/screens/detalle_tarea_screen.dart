@@ -83,7 +83,7 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context, true); // Retornar true para actualizar lista
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {

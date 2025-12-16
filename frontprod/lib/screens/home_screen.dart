@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'seleccion_linea_screen.dart';
 import 'login_screen.dart';
 import 'supervisor_dashboard_screen.dart';
+import 'control_calidad_dashboard_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/app_footer.dart'; 
 
@@ -84,20 +85,12 @@ class _HomeScreenState extends State<HomeScreen> {
         break;
 
       case 'control_calidad':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Dashboard de Control de Calidad'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        // Cuando esté listo:
-        // Navigator.push(
-        //   context,
-        //   MaterialPageRoute(
-        //     builder: (context) => const CalidadDashboardScreen(),
-        //   ),
-        // );
+         Navigator.push(
+           context,
+           MaterialPageRoute(
+             builder: (context) => ControlCalidadDashboard(),
+           ),
+         );
         break;
 
       default:

@@ -996,8 +996,6 @@ class ApiService {
         // ========================================================================
         // CON NUEVA FOTO: Usar multipart/form-data
         // ========================================================================
-        print('🌐 Actualizando trazabilidad $trazabilidadId CON nueva foto...');
-        
         var request = http.MultipartRequest(
           'PATCH',
           Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/'),
@@ -1027,19 +1025,13 @@ class ApiService {
         request.fields['reprocesos_data'] = json.encode(datos['reprocesos_data']);
         request.fields['mermas_data'] = json.encode(datos['mermas_data']);
         request.fields['colaboradores_codigos'] = json.encode(datos['colaboradores_codigos']);
-
-        print('📤 Enviando request multipart...');
         
         final streamedResponse = await request.send();
         final response = await http.Response.fromStream(streamedResponse);
 
-        print('📥 Response status: ${response.statusCode}');
-
         if (response.statusCode == 200) {
-          print('✅ Trazabilidad actualizada con nueva foto');
           return json.decode(utf8.decode(response.bodyBytes));
         } else {
-          print('❌ Error: ${response.body}');
           _handleError(response);
           throw Exception('Error al actualizar trazabilidad');
         }
@@ -1047,27 +1039,20 @@ class ApiService {
         // ========================================================================
         // SIN NUEVA FOTO: Usar application/json (mantiene foto existente)
         // ========================================================================
-        print('🌐 Actualizando trazabilidad $trazabilidadId SIN cambiar foto...');
-        
         final response = await http.patch(
           Uri.parse('$baseUrl/trazabilidades/$trazabilidadId/'),
           headers: _getHeaders(),
           body: json.encode(datos),
         );
 
-        print('📥 Response status: ${response.statusCode}');
-
         if (response.statusCode == 200) {
-          print('✅ Trazabilidad actualizada (foto mantenida)');
           return json.decode(utf8.decode(response.bodyBytes));
         } else {
-          print('❌ Error: ${response.body}');
           _handleError(response);
           throw Exception('Error al actualizar trazabilidad');
         }
       }
     } catch (e) {
-      print('❌ Error en updateTrazabilidad: $e');
       throw Exception('Error de conexión: $e');
     }
   }
@@ -1096,6 +1081,7 @@ class ApiService {
   Future<void> _clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
+    await prefs.remove('refresh');
     _token = null;
   }
 

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:frontprod/services/api_service.dart';
-import 'package:provider/provider.dart';
-import '../services/auth_service.dart';
 import 'lista_tareas_screen.dart';
 import 'colaboradores_screen.dart';
 import 'firma_supervisor_screen.dart';
+import 'home_screen.dart';
 
 const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 
@@ -18,18 +17,54 @@ class SupervisorDashboard extends StatefulWidget {
 class _SupervisorDashboardState extends State<SupervisorDashboard> {
   final ApiService _apiService = ApiService();
   int _selectedIndex = 0;
-  int _refreshKey = 0;
+  final int _refreshKey = 0;
 
-  void _refreshLista() {
-    setState(() {
-      _refreshKey++;
-    });
+  Map<String, dynamic>? _usuario;
+  bool _isLoadingUser = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarUsuario();
+  }
+
+  Future<void> _cargarUsuario() async {
+    try {
+      final usuario = await _apiService.getCurrentUser();
+      if (mounted) {
+        setState(() {
+          _usuario = usuario;
+          _isLoadingUser = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingUser = false;
+        });
+        
+        // Si falla, cerrar sesión y volver al home
+        await _apiService.logout();
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authService = Provider.of<AuthService>(context);
-    final usuario = authService.usuario;
+    if (_isLoadingUser) {
+      return const Scaffold(
+        backgroundColor: primaryColorDark,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Colors.white,
+          ),
+        ),
+      );
+    }
 
     final screens = [
       ListaTareasScreen(key: ValueKey(_refreshKey)),
@@ -80,14 +115,14 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    usuario?['nombre_completo'] ?? 'Usuario',
+                    _usuario?['nombre_completo'] ?? 'Usuario',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
-                    usuario?['rol_display'] ?? '',
+                    _usuario?['rol_display'] ?? '',
                     style: TextStyle(
                       fontSize: 12,
                       color: Color.fromARGB(255, 217, 244, 205),
@@ -145,27 +180,26 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar', style: TextStyle(color: primaryColorDark)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromARGB(255, 88, 26, 21),
+              backgroundColor: primaryColorLight,
             ),
-            child: const Text('Cerrar Sesión'),
+            child: const Text('Cerrar Sesión', style: TextStyle(color: primaryColorDark)),
           ),
         ],
       ),
     );
 
     if (confirmar == true && mounted) {
-      // Cerrar sesión (eliminar token)
       await _apiService.logout();
-      
       if (!mounted) return;
-      
-      // Volver al HomeScreen
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
     }
   }
 }

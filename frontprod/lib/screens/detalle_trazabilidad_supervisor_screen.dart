@@ -25,14 +25,14 @@ class DetalleTrazabilidadSupervisorScreen extends StatefulWidget {
       _DetalleTrazabilidadSupervisorScreenState();
 }
 
-class _DetalleTrazabilidadSupervisorScreenState
-    extends State<DetalleTrazabilidadSupervisorScreen> {
+class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilidadSupervisorScreen> {
   // ========== ESTADO ==========
   bool _isLoading = true;
   bool _isSaving = false;
   Map<String, dynamic>? _trazabilidad;
   String? _error;
   bool _modoEdicion = false;
+  Map<String, dynamic>? _usuario;
 
   double _convertirADouble(dynamic valor) {
   if (valor == null) return 0.0;
@@ -81,7 +81,7 @@ class _DetalleTrazabilidadSupervisorScreenState
   @override
   void initState() {
     super.initState();
-    _cargarTrazabilidad();
+    _cargarDatos();
     _codigoColaboradorLoteController.addListener(_actualizarLoteEnPantalla);
   }
 
@@ -118,13 +118,35 @@ class _DetalleTrazabilidadSupervisorScreenState
     super.dispose();
   }
 
-  // ========== CARGAR TRAZABILIDAD ==========
-  Future<void> _cargarTrazabilidad() async {
+  // ========== CARGAR USUARIO Y TRAZABILIDAD ==========
+  Future<void> _cargarDatos() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
+    try {
+      // 1️⃣ Cargar usuario actual
+      final usuario = await _apiService.getCurrentUser();
+      
+      // 2️⃣ Cargar trazabilidad
+      await _cargarTrazabilidadInternal();
+
+      setState(() {
+        _usuario = usuario;
+      });
+
+      print('✅ Usuario cargado: ${usuario['username']} - Rol: ${usuario['rol']}');
+    } catch (e) {
+      setState(() {
+        _error = 'Error al cargar datos: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ========== CARGAR TRAZABILIDAD ==========
+  Future<void> _cargarTrazabilidadInternal() async {
     try {
       final data = await _apiService.getTrazabilidadDetalle(widget.trazabilidadId);
       
@@ -281,6 +303,143 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
   }
 
+  // ========== VERIFICAR ROL DEL USUARIO ==========
+  bool get _esSupervisor => _usuario?['rol'] == 'supervisor';
+  bool get _esControlCalidad => _usuario?['rol'] == 'control_calidad';
+
+  // ========== VERIFICAR FIRMAS ==========
+  bool get _tieneFirmaSupervisor {
+    final firmas = _trazabilidad?['firmas'] as List<dynamic>? ?? [];
+    return firmas.any((firma) => firma is Map && firma['tipo_firma'] == 'supervisor');
+  }
+
+  bool get _tieneFirmaCalidad {
+    final firmas = _trazabilidad?['firmas'] as List<dynamic>? ?? [];
+    return firmas.any((firma) => firma is Map && firma['tipo_firma'] == 'control_calidad');
+  }
+
+  // ========== OBTENER ESTADO ACTUAL ==========
+  String get _estadoActual => _trazabilidad?['estado']?.toString() ?? 'en_revision';
+
+  // ========== COLOR SEGÚN ESTADO ==========
+  Color _getColorEstado(String estado) {
+    switch (estado) {
+      case 'liberado':
+        return Colors.green;
+      case 'retenido':
+        return Colors.red;
+      case 'en_revision':
+      default:
+        return Colors.blue;
+    }
+  }
+
+  // ========== TEXTO SEGÚN ESTADO ==========
+  String _getTextoEstado(String estado) {
+    switch (estado) {
+      case 'liberado':
+        return 'LIBERADO';
+      case 'retenido':
+        return 'RETENIDO';
+      case 'en_revision':
+      default:
+        return 'EN REVISIÓN';
+    }
+  }
+
+  // ========== ICONO SEGÚN ESTADO ==========
+  IconData _getIconoEstado(String estado) {
+    switch (estado) {
+      case 'liberado':
+        return Icons.check_circle;
+      case 'retenido':
+        return Icons.cancel;
+      case 'en_revision':
+      default:
+        return Icons.pending;
+    }
+  }
+
+  // ========== WIDGET: ESTADO DESTACADO ==========
+  Widget _buildEstadoDestacado() {
+    final estado = _estadoActual;
+    final color = _getColorEstado(estado);
+    final texto = _getTextoEstado(estado);
+    final icono = _getIconoEstado(estado);
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color, width: 2),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icono,
+            size: 48,
+            color: color,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Estado Actual',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  texto,
+                  style: TextStyle(
+                    fontSize: 24,
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                // Mostrar motivo de retención si existe
+                if (estado == 'retenido' && _trazabilidad?['motivo_retencion'] != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning, size: 16, color: Colors.red.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Motivo: ${_trazabilidad!['motivo_retencion']}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.red.shade900,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ========== CANCELAR EDICIÓN (REVERTIR CAMBIOS) ==========
   void _cancelarEdicion() {
     setState(() {
@@ -294,7 +453,7 @@ class _DetalleTrazabilidadSupervisorScreenState
       _modoEdicion = false;
     });
 
-    _cargarTrazabilidad();
+    _cargarDatos();
   }
 
   void _mostrarError(String mensaje) {
@@ -481,7 +640,7 @@ class _DetalleTrazabilidadSupervisorScreenState
           _modoEdicion = false;
         });
 
-        await _cargarTrazabilidad();
+        await _cargarDatos();
       }
     } catch (e) {
       if (mounted) {
@@ -761,14 +920,48 @@ class _DetalleTrazabilidadSupervisorScreenState
     }
   }
 
+  // ========== FIRMAR TRAZABILIDAD ==========
   Future<void> _firmarTrazabilidad() async {
+    // Verificar que el usuario pueda firmar
+    if (_esSupervisor && _tieneFirmaSupervisor) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ya firmaste esta trazabilidad'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_esControlCalidad && !_tieneFirmaSupervisor) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El supervisor debe firmar primero'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_esControlCalidad && _tieneFirmaCalidad) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ya firmaste esta trazabilidad'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Confirmar acción
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirmar Firma'),
-        content: const Text(
-          '¿Estás seguro de que deseas firmar esta trazabilidad?\n\n'
-          'Una vez firmada, no podrás modificarla.',
+        content: Text(
+          _esSupervisor 
+              ? '¿Confirmas que la información es correcta y deseas firmar esta trazabilidad?'
+              : '¿Confirmas que has revisado la trazabilidad y deseas firmarla?',
         ),
         actions: [
           TextButton(
@@ -788,35 +981,194 @@ class _DetalleTrazabilidadSupervisorScreenState
 
     if (confirmar != true) return;
 
-    setState(() {
-      _isSaving = true;
-    });
+    // Mostrar loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
 
     try {
       await _apiService.firmarTrazabilidad(widget.trazabilidadId);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Trazabilidad firmada correctamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      if (!mounted) return;
+      Navigator.pop(context); // Cerrar loading
 
-        await _cargarTrazabilidad();
-        Navigator.pop(context, true);
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Trazabilidad firmada exitosamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Recargar datos
+      await _cargarDatos();
+      
+      // No cerrar la pantalla, mantener al usuario aquí
     } catch (e) {
-      if (mounted) {
-        _mostrarError('Error al firmar: $e');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
+      if (!mounted) return;
+      Navigator.pop(context); // Cerrar loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al firmar: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ========== CAMBIAR ESTADO DE TRAZABILIDAD ==========
+  Future<void> _cambiarEstado(String nuevoEstado) async {
+    // Solo Control de Calidad puede cambiar estado
+    if (!_esControlCalidad) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Solo Control de Calidad puede cambiar el estado'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Si es retener, pedir motivo
+    String? motivoRetencion;
+    if (nuevoEstado == 'retenido') {
+      motivoRetencion = await _mostrarDialogoMotivoRetencion();
+      if (motivoRetencion == null || motivoRetencion.isEmpty) {
+        return; // Usuario canceló o no ingresó motivo
       }
     }
+
+    // Confirmar acción
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(nuevoEstado == 'liberado' ? 'Liberar Producto' : 'Retener Producto'),
+        content: Text(
+          nuevoEstado == 'liberado'
+              ? '¿Confirmas que deseas LIBERAR este producto?'
+              : '¿Confirmas que deseas RETENER este producto?\n\nMotivo: $motivoRetencion',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: nuevoEstado == 'liberado' ? Colors.green : Colors.red,
+            ),
+            child: Text(nuevoEstado == 'liberado' ? 'Liberar' : 'Retener'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    // Mostrar loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      await _apiService.cambiarEstadoTrazabilidad(
+        trazabilidadId: widget.trazabilidadId,
+        estado: nuevoEstado,
+        motivoRetencion: motivoRetencion,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Cerrar loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            nuevoEstado == 'liberado' 
+                ? 'Producto liberado exitosamente' 
+                : 'Producto retenido exitosamente',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Recargar datos
+      await _cargarDatos();
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Cerrar loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cambiar estado: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ========== DIÁLOGO: MOTIVO DE RETENCIÓN ==========
+  Future<String?> _mostrarDialogoMotivoRetencion() async {
+    final controller = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Motivo de Retención'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Describe detalladamente el motivo por el cual se retiene este producto:',
+              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              maxLines: 4,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                hintText: 'Ejemplo: Producto con defectos visibles en el chocolate, se observa blanqueamiento en más del 30% de las unidades...',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Debes ingresar un motivo'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context, controller.text.trim());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Retener'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ========== UI: INFORMACIÓN DE LA TAREA ==========
@@ -837,7 +1189,34 @@ class _DetalleTrazabilidadSupervisorScreenState
   
   final juliano = _trazabilidad!['juliano'];
   final lote = _trazabilidad!['lote'];
-  final fechaElaboracion = _tarea!['fecha_elaboracion_real'] ?? _tarea!['fecha'];
+  String fechaElaboracion = 'N/A';
+  try {
+    final fechaElabRaw = _tarea!['fecha_elaboracion_real'] ?? _tarea!['fecha'];
+    if (fechaElabRaw != null) {
+      DateTime fechaDateTime;
+      
+      // Parsear según formato recibido
+      if (fechaElabRaw.toString().contains('-') && fechaElabRaw.toString().length == 10) {
+        // Formato: YYYY-MM-DD (desde el backend)
+        fechaDateTime = DateTime.parse(fechaElabRaw.toString());
+      } else if (fechaElabRaw.toString().contains('-') && fechaElabRaw.toString().contains('T')) {
+        // Formato ISO completo: YYYY-MM-DDTHH:MM:SS
+        fechaDateTime = DateTime.parse(fechaElabRaw.toString());
+      } else {
+        // Intentar parseo directo
+        fechaDateTime = DateTime.parse(fechaElabRaw.toString());
+      }
+      
+      // Formatear a DD/MM/YYYY
+      fechaElaboracion = DateFormat('dd/MM/yyyy').format(fechaDateTime);
+    }
+  } catch (e) {
+    print('❌ Error al formatear fecha de elaboración: $e');
+    print('   Fecha raw: ${_tarea!['fecha_elaboracion_real'] ?? _tarea!['fecha']}');
+    fechaElaboracion = _tarea!['fecha_elaboracion_real']?.toString() ?? 
+                      _tarea!['fecha']?.toString() ?? 
+                      'N/A';
+  }
 
   return Card(
     elevation: 4,
@@ -1653,9 +2032,6 @@ class _DetalleTrazabilidadSupervisorScreenState
 
   Widget _buildSeccionFirmas() {
     final firmas = _trazabilidad!['firmas'] as List? ?? [];
-    final tieneFirmaSupervisor = firmas.any(
-      (f) => f is Map && f['tipo_firma'] == 'supervisor'
-    );
 
     return Card(
       elevation: 4,
@@ -1666,17 +2042,29 @@ class _DetalleTrazabilidadSupervisorScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'FIRMAS',
+              'FIRMAS Y ESTADO',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Divider(),
+
+            // ========== ESTADO DESTACADO ==========
+            _buildEstadoDestacado(),
+
+            const SizedBox(height: 16),
+
+            // ========== LISTA DE FIRMAS ==========
+            Text(
+              'Historial de Firmas',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
 
             if (firmas.isEmpty)
               Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Center(
                   child: Text(
-                    'Sin firmas',
+                    'Sin firmas registradas',
                     style: TextStyle(color: Colors.grey),
                   ),
                 ),
@@ -1754,67 +2142,320 @@ class _DetalleTrazabilidadSupervisorScreenState
                 );
               }),
 
-            if (!tieneFirmaSupervisor) ...[
-              SizedBox(height: 16),
-              if (_modoEdicion)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isSaving ? null : _guardarCambios,
-                    icon: _isSaving
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Icon(Icons.save, color: Colors.white),
-                    label: Text(_isSaving ? 'Guardando...' : 'Guardar Cambios', style: TextStyle(color: Colors.white),),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      padding: EdgeInsets.all(16),
-                    ),
-                  ),
-                )
-              else
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isSaving ? null : _firmarTrazabilidad,
-                    icon: _isSaving
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Icon(Icons.edit_note, color: Colors.white),
-                    label: Text(_isSaving ? 'Firmando...' : 'Firmar Trazabilidad', style: TextStyle(color: Colors.white),),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: EdgeInsets.all(16),
-                    ),
-                  ),
-                ),
-              SizedBox(height: 8),
-              Text(
-                _modoEdicion 
-                    ? 'Los cambios no se guardarán hasta que presiones "Guardar Cambios".'
-                    : 'Una vez firmada, no podrás modificar esta trazabilidad.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+            const SizedBox(height: 16),
+            Divider(),
+
+            // ========== BOTONES DE ACCIÓN ==========
+            _buildBotonesAccion(),
           ],
         ),
+      ),
+    );
+  }
+
+  // ========== BOTONES DE ACCIÓN SEGÚN ROL ==========
+  Widget _buildBotonesAccion() {
+    // ========== SUPERVISOR ==========
+    if (_esSupervisor) {
+      // Si ya firmó, solo mostrar botón de editar (si no está en modo edición)
+      if (_tieneFirmaSupervisor) {
+        return Column(
+          children: [
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ya firmaste esta trazabilidad. No puedes modificarla.',
+                      style: TextStyle(
+                        color: Colors.green.shade900,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      }
+
+      // No ha firmado: mostrar botón según modo
+      if (_modoEdicion) {
+        return Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isSaving ? null : _guardarCambios,
+                icon: _isSaving
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(Icons.save, color: Colors.white),
+                label: Text(
+                  _isSaving ? 'Guardando...' : 'Guardar Cambios',
+                  style: TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  padding: EdgeInsets.all(16),
+                ),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Los cambios no se guardarán hasta que presiones "Guardar Cambios".',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        );
+      } else {
+        return Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isSaving ? null : _firmarTrazabilidad,
+                icon: _isSaving
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(Icons.edit_note, color: Colors.white),
+                label: Text(
+                  _isSaving ? 'Firmando...' : 'Firmar Trazabilidad',
+                  style: TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  padding: EdgeInsets.all(16),
+                ),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Una vez firmada, no podrás modificar esta trazabilidad.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        );
+      }
+    }
+
+    // ========== CONTROL DE CALIDAD ==========
+    if (_esControlCalidad) {
+      // Verificar si supervisor firmó primero
+      if (!_tieneFirmaSupervisor) {
+        return Container(
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.orange.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.orange.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.pending, color: Colors.orange),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'El supervisor debe firmar primero antes de que puedas revisar esta trazabilidad.',
+                  style: TextStyle(
+                    color: Colors.orange.shade900,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      // Supervisor ya firmó: mostrar controles de Control de Calidad
+      return Column(
+        children: [
+          // Botón de Firmar (si no ha firmado)
+          if (!_tieneFirmaCalidad) ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isSaving ? null : _firmarTrazabilidad,
+                icon: _isSaving
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(Icons.verified, color: Colors.white),
+                label: Text(
+                  _isSaving ? 'Firmando...' : 'Firmar Revisión',
+                  style: TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  padding: EdgeInsets.all(16),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Firma la revisión para confirmar que revisaste la trazabilidad.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Divider(),
+            const SizedBox(height: 8),
+          ],
+
+          // Botones de Cambiar Estado (siempre disponibles para Control de Calidad)
+          Text(
+            'Cambiar Estado del Producto',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          Row(
+            children: [
+              // Botón LIBERAR
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _estadoActual == 'liberado' 
+                      ? null 
+                      : () => _cambiarEstado('liberado'),
+                  icon: Icon(
+                    Icons.check_circle,
+                    color: _estadoActual == 'liberado' 
+                        ? Colors.grey 
+                        : Colors.green,
+                  ),
+                  label: Text(
+                    _estadoActual == 'liberado' ? 'Liberado' : 'Liberar',
+                    style: TextStyle(
+                      color: _estadoActual == 'liberado' 
+                          ? Colors.grey 
+                          : Colors.green,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(
+                      color: _estadoActual == 'liberado' 
+                          ? Colors.grey 
+                          : Colors.green,
+                      width: 2,
+                    ),
+                    backgroundColor: _estadoActual == 'liberado' 
+                        ? Colors.grey.shade100 
+                        : Colors.green.shade50,
+                  ),
+                ),
+              ),
+              
+              const SizedBox(width: 12),
+              
+              // Botón RETENER
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _estadoActual == 'retenido' 
+                      ? null 
+                      : () => _cambiarEstado('retenido'),
+                  icon: Icon(
+                    Icons.cancel,
+                    color: _estadoActual == 'retenido' 
+                        ? Colors.grey 
+                        : Colors.red,
+                  ),
+                  label: Text(
+                    _estadoActual == 'retenido' ? 'Retenido' : 'Retener',
+                    style: TextStyle(
+                      color: _estadoActual == 'retenido' 
+                          ? Colors.grey 
+                          : Colors.red,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(
+                      color: _estadoActual == 'retenido' 
+                          ? Colors.grey 
+                          : Colors.red,
+                      width: 2,
+                    ),
+                    backgroundColor: _estadoActual == 'retenido' 
+                        ? Colors.grey.shade100 
+                        : Colors.red.shade50,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 8),
+          Text(
+            'Puedes cambiar el estado en cualquier momento, incluso después de firmar.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      );
+    }
+
+    // ========== USUARIO SIN ROL VÁLIDO ==========
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Text(
+        'No tienes permisos para realizar acciones en esta trazabilidad.',
+        style: TextStyle(color: Colors.grey[700]),
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -1851,7 +2492,7 @@ class _DetalleTrazabilidadSupervisorScreenState
               Text(_error!, textAlign: TextAlign.center),
               SizedBox(height: 16),
               ElevatedButton(
-                onPressed: _cargarTrazabilidad,
+                onPressed: _cargarDatos,
                 child: Text('Reintentar'),
               ),
             ],
@@ -1874,7 +2515,7 @@ class _DetalleTrazabilidadSupervisorScreenState
           ),
         ),
         actions: [
-          if (!tieneFirmaSupervisor)
+          if (_esSupervisor && !_tieneFirmaSupervisor)
             IconButton(
               icon: Icon(_modoEdicion ? Icons.close : Icons.edit),
               onPressed: () {
@@ -1890,14 +2531,14 @@ class _DetalleTrazabilidadSupervisorScreenState
             ),
           IconButton(
             icon: Icon(Icons.refresh),
-            onPressed: _cargarTrazabilidad,
+            onPressed: _cargarDatos,
             tooltip: 'Actualizar',
           ),
         ],
         backgroundColor: primaryColorDark,
       ),
       body: RefreshIndicator(
-        onRefresh: _cargarTrazabilidad,
+        onRefresh: _cargarDatos,
         child: SingleChildScrollView(
           physics: AlwaysScrollableScrollPhysics(),
           child: Column(

@@ -1,6 +1,5 @@
 // ============================================================================
-// PANTALLA: Lista de Firmas de Supervisor
-// VERSIÓN MEJORADA - Con búsqueda de productos
+// PANTALLA: Lista de Trazabilidades para Control de Calidad
 // ============================================================================
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -8,20 +7,21 @@ import '../services/api_service.dart';
 import 'detalle_trazabilidad_supervisor_screen.dart';
 
 const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
-class FirmaSupervisorScreen extends StatefulWidget {
-  const FirmaSupervisorScreen({Key? key}) : super(key: key);
+
+class FirmaControlCalidadScreen extends StatefulWidget {
+  const FirmaControlCalidadScreen({Key? key}) : super(key: key);
 
   @override
-  State<FirmaSupervisorScreen> createState() => _FirmaSupervisorScreenState();
+  State<FirmaControlCalidadScreen> createState() => _FirmaControlCalidadScreenState();
 }
 
-class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
+class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
   // ========== ESTADO ==========
   bool _isLoading = false;
   List<Map<String, dynamic>> _trazabilidades = [];
   String? _error;
 
-  // ========== FILTROS ==========
+  // ========== FILTROS (IGUALES A SUPERVISOR) ==========
   DateTime? _fechaSeleccionada;
   String? _julianoFiltro;
   int? _turnoSeleccionado;
@@ -44,12 +44,17 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
     _inicializar();
   }
 
+  @override
+  void dispose() {
+    _julianoController.dispose();
+    super.dispose();
+  }
+
   // ========== INICIALIZAR ==========
   Future<void> _inicializar() async {
     await _cargarTurnos();
     await _cargarLineas();
     await _cargarProductos();
-    await _cargarTrazabilidades();
     await _cargarTrazabilidades();
   }
 
@@ -91,7 +96,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
 
   // ========== CARGAR TRAZABILIDADES CON FILTROS ==========
   Future<void> _cargarTrazabilidades() async {
-    
     setState(() {
       _isLoading = true;
       _error = null;
@@ -119,16 +123,8 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       if (_productoSeleccionado != null) {
         queryParams['producto'] = _productoSeleccionado!;
       }
-      final response = await _apiService.getTrazabilidades(queryParams: queryParams);
 
-      if (response.isNotEmpty) {
-        print('🔵 Primera trazabilidad:');
-        print(response[0]);
-        print('🔵 Tipo de hoja_procesos: ${response[0]['hoja_procesos'].runtimeType}');
-        if (response[0]['hoja_procesos'] is Map) {
-          print('🔵 Tipo de tarea: ${response[0]['hoja_procesos']['tarea'].runtimeType}');
-        }
-      }
+      final response = await _apiService.getTrazabilidades(queryParams: queryParams);
 
       setState(() {
         _trazabilidades = List<Map<String, dynamic>>.from(response);
@@ -148,7 +144,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   void _limpiarFiltros() {
     setState(() {
       _fechaSeleccionada = null;
-      _julianoFiltro = null; 
+      _julianoFiltro = null;
       _turnoSeleccionado = null;
       _lineaSeleccionada = null;
       _productoSeleccionado = null;
@@ -158,14 +154,13 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
     _cargarTrazabilidades();
   }
 
-  // ========== MOSTRAR SELECTOR DE PRODUCTO CON BÚSQUEDA ==========
+  // ========== MOSTRAR SELECTOR DE PRODUCTO ==========
   Future<void> _mostrarSelectorProducto() async {
     final resultado = await showDialog<Map<String, String>?>(
       context: context,
       builder: (context) => _DialogoSelectorProducto(productos: _productos),
     );
 
-    // Si resultado es null, significa "Todos los productos"
     if (resultado == null) {
       setState(() {
         _productoSeleccionado = null;
@@ -173,7 +168,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       });
       _cargarTrazabilidades();
     } else {
-      // Si resultado tiene datos, es un producto específico
       setState(() {
         _productoSeleccionado = resultado['codigo'];
         _productoNombreSeleccionado = resultado['nombre'];
@@ -255,7 +249,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       keyboardType: TextInputType.number,
       maxLength: 3,
       onChanged: (value) {
-        // Validar que sea numérico y esté en rango 1-366
         if (value.isEmpty) {
           setState(() {
             _julianoFiltro = null;
@@ -288,7 +281,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         const DropdownMenuItem<int?>(
           value: null,
           child: Text('Todos los turnos'),
-
         ),
         ..._turnos.map((turno) {
           return DropdownMenuItem<int?>(
@@ -336,7 +328,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
     );
   }
 
-  // ========== UI: SELECTOR DE PRODUCTO CON BÚSQUEDA ==========
+  // ========== UI: SELECTOR DE PRODUCTO ==========
   Widget _buildSelectorProducto() {
     return InkWell(
       onTap: _mostrarSelectorProducto,
@@ -388,13 +380,13 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
   // ========== UI: SECCIÓN DE FILTROS ==========
   Widget _buildSeccionFiltros() {
     final hayFiltrosActivos = _fechaSeleccionada != null ||
-        _julianoFiltro != null || 
+        _julianoFiltro != null ||
         _turnoSeleccionado != null ||
         _lineaSeleccionada != null ||
         _productoSeleccionado != null;
 
     return Card(
-      color: Color.fromARGB(255, 224, 245, 214),
+      color: const Color.fromARGB(255, 224, 245, 214),
       margin: const EdgeInsets.all(16),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -404,7 +396,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                const Text(
                   'Filtros',
                   style: TextStyle(
                     fontSize: 18,
@@ -433,7 +425,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
             _buildDropdownTurno(),
             const SizedBox(height: 12),
@@ -451,14 +442,12 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
     try {
       final hojaProcesos = trazabilidad['hoja_procesos'];
       
-      // Verificar que hoja_procesos sea un mapa
       if (hojaProcesos == null || hojaProcesos is! Map<String, dynamic>) {
         return const SizedBox.shrink();
       }
 
       final tarea = hojaProcesos['tarea'];
       
-      // Verificar que tarea sea un mapa
       if (tarea == null || tarea is! Map<String, dynamic>) {
         return const SizedBox.shrink();
       }
@@ -467,7 +456,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       final linea = tarea['linea'];
       final turno = tarea['turno'];
       
-      // Verificar que los objetos anidados sean mapas
       if (producto == null || producto is! Map<String, dynamic> ||
           linea == null || linea is! Map<String, dynamic> ||
           turno == null || turno is! Map<String, dynamic>) {
@@ -512,7 +500,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
         fechaElaboracion = DateFormat('dd/MM/yy').format(fechaCreacion);
       } catch (e) {
         fechaElaboracion = 'N/A';
-      }       
+      }
 
       return Card(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -533,7 +521,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
 
             _cargarTrazabilidades();
           },
-
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -560,7 +547,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.calendar_today,
                               size: 18,
                               color: Color.fromARGB(255, 137, 29, 67),
@@ -583,7 +570,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.inventory,
                               size: 18,
                               color: Color.fromARGB(255, 137, 29, 67),
@@ -610,7 +597,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.qr_code,
                               size: 18,
                               color: Color.fromARGB(255, 137, 29, 67),
@@ -633,7 +620,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.conveyor_belt,
                               size: 18,
                               color: Color.fromARGB(255, 137, 29, 67),
@@ -726,7 +713,6 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 10,
-                                
                               ),
                               decoration: BoxDecoration(
                                 color: tieneFirmaCalidad 
@@ -771,8 +757,7 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
           ),
         ),
       );
-    }
-    catch (e) {
+    } catch (e) {
       print('Error al construir tarjeta de trazabilidad: $e');
       return const SizedBox.shrink();
     }
@@ -823,6 +808,35 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
     );
   }
 
+  // ========== MÉTODOS AUXILIARES PARA ESTADOS ==========
+  
+  /// Obtiene el color según el estado de la trazabilidad
+  Color _getColorEstado(String? estado) {
+    switch (estado) {
+      case 'liberado':
+        return Colors.green;
+      case 'retenido':
+        return Colors.red;
+      case 'en_revision':
+      default:
+        return Colors.blue;
+    }
+  }
+  
+  /// Obtiene el texto según el estado de la trazabilidad
+  String _getTextoEstado(String? estado) {
+    switch (estado) {
+      case 'liberado':
+        return 'Liberado';
+      case 'retenido':
+        return 'Retenido';
+      case 'en_revision':
+        return 'En revisión';
+      default:
+        return 'En revisión';
+    }
+  }
+
   // ========== BUILD PRINCIPAL ==========
   @override
   Widget build(BuildContext context) {
@@ -865,35 +879,10 @@ class _FirmaSupervisorScreenState extends State<FirmaSupervisorScreen> {
       ),
     );
   }
-  Color _getColorEstado(String? estado) {
-    switch (estado) {
-      case 'liberado':
-        return Colors.green;
-      case 'retenido':
-        return Colors.red;
-      case 'en_revision':
-      default:
-        return Colors.blue; // Azul para "en revisión"
-    }
-  }
-  
-  /// Obtiene el texto según el estado de la trazabilidad
-  String _getTextoEstado(String? estado) {
-    switch (estado) {
-      case 'liberado':
-        return 'Liberado';
-      case 'retenido':
-        return 'Retenido';
-      case 'en_revision':
-        return 'En revisión';
-      default:
-        return 'En revisión';
-    }
-  }
 }
 
 // ============================================================================
-// DIÁLOGO: Selector de Producto con Búsqueda
+// DIÁLOGO: Selector de Producto con Búsqueda (IDÉNTICO A SUPERVISOR)
 // ============================================================================
 class _DialogoSelectorProducto extends StatefulWidget {
   final List<Map<String, dynamic>> productos;
@@ -944,7 +933,6 @@ class _DialogoSelectorProductoState extends State<_DialogoSelectorProducto> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Título
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -963,7 +951,6 @@ class _DialogoSelectorProductoState extends State<_DialogoSelectorProducto> {
             ),
             const SizedBox(height: 16),
 
-            // Campo de búsqueda
             TextField(
               controller: _busquedaController,
               decoration: InputDecoration(
@@ -986,7 +973,6 @@ class _DialogoSelectorProductoState extends State<_DialogoSelectorProducto> {
             ),
             const SizedBox(height: 16),
 
-            // Opción "Todos"
             ListTile(
               title: const Text(
                 'Todos los productos',
@@ -994,7 +980,7 @@ class _DialogoSelectorProductoState extends State<_DialogoSelectorProducto> {
               ),
               leading: const Icon(Icons.select_all),
               onTap: () {
-                Navigator.pop(context, null);  // ← Retornar null para "Todos"
+                Navigator.pop(context, null);
               },
               tileColor: Colors.grey[100],
               shape: RoundedRectangleBorder(
@@ -1003,7 +989,6 @@ class _DialogoSelectorProductoState extends State<_DialogoSelectorProducto> {
             ),
             const SizedBox(height: 8),
 
-            // Lista de productos filtrados
             Expanded(
               child: _productosFiltrados.isEmpty
                   ? Center(
@@ -1027,7 +1012,7 @@ class _DialogoSelectorProductoState extends State<_DialogoSelectorProducto> {
                               vertical: 8,
                             ),
                             title: Text(
-                              codigo,  // ← CÓDIGO ARRIBA EN GRANDE
+                              codigo,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -1035,7 +1020,7 @@ class _DialogoSelectorProductoState extends State<_DialogoSelectorProducto> {
                               ),
                             ),
                             subtitle: Text(
-                              nombre,  // ← NOMBRE ABAJO MÁS PEQUEÑO
+                              nombre,
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.grey[700],

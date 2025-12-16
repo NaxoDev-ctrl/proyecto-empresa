@@ -2,47 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:frontprod/services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
-import 'lista_tareas_screen.dart';
-import 'colaboradores_screen.dart';
-import 'firma_supervisor_screen.dart';
+import 'firma_control_calidad_screen.dart';
 
 const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 
-class SupervisorDashboard extends StatefulWidget {
-  const SupervisorDashboard({super.key});
+class ControlCalidadDashboard extends StatefulWidget {
+  const ControlCalidadDashboard({super.key});
 
   @override
-  State<SupervisorDashboard> createState() => _SupervisorDashboardState();
+  State<ControlCalidadDashboard> createState() => _ControlCalidadDashboardState();
 }
 
-class _SupervisorDashboardState extends State<SupervisorDashboard> {
+class _ControlCalidadDashboardState extends State<ControlCalidadDashboard> {
   final ApiService _apiService = ApiService();
-  int _selectedIndex = 0;
-  int _refreshKey = 0;
-
-  void _refreshLista() {
-    setState(() {
-      _refreshKey++;
-    });
-  }
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
     final usuario = authService.usuario;
 
-    final screens = [
-      ListaTareasScreen(key: ValueKey(_refreshKey)),
-      ColaboradoresScreen(key: ValueKey(_refreshKey)),
-      FirmaSupervisorScreen(key: ValueKey(_refreshKey)),
-      const Center(child: Text('Reportes (Próximamente)')),
-    ];
-
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false,
         backgroundColor: primaryColorDark,
-        toolbarHeight: 70, 
+        toolbarHeight: 70,
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: SizedBox(
@@ -58,12 +41,12 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'EQUIPO PRODUCCION',
+              'CONTROL DE CALIDAD',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white,
                 fontSize: 28,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
           ],
@@ -105,37 +88,10 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
           ),
         ],
       ),
-      body: screens[_selectedIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.assignment),
-            label: 'Tareas',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people),
-            label: 'Colaboradores',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart),
-            label: 'Trazabilidad',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart),
-            label: 'Reportes',
-          ),
-        ],
-      ),
+      
+      body: const FirmaControlCalidadScreen(), // ✅ Directamente la pantalla principal
     );
   }
-
-  /// Cerrar sesión con confirmación
   Future<void> _cerrarSesion() async {
     final confirmar = await showDialog<bool>(
       context: context,

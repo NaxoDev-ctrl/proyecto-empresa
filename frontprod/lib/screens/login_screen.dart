@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'supervisor_dashboard_screen.dart'; 
 import '../widgets/app_footer.dart'; 
+import 'control_calidad_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,13 +49,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      // Login exitoso - navegar a TU pantalla de supervisor ORIGINAL
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const SupervisorDashboard(),  // <-- TU CLASE ORIGINAL
-        ),
-      );
+      final userData = await _apiService.getCurrentUser();
+      final rol = userData['rol'];
+
+      if (rol == 'supervisor') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const SupervisorDashboard(),
+          ),
+        );
+      } else if (rol == 'control_calidad') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ControlCalidadDashboard(),
+          ),
+        );
+      } else {
+        setState(() {
+          _errorMessage = 'Rol de usuario no reconocido';
+        });
+      }
 
     } catch (e) {
       setState(() {

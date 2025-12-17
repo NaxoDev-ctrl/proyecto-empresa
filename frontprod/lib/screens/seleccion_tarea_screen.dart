@@ -165,6 +165,8 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
     );
 
     if (confirmar != true) return;
+    
+    if (!mounted) return; 
 
     showDialog(
       context: context,
@@ -441,7 +443,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withAlpha(26),
                       blurRadius: 10,
                       offset: const Offset(0, -5),
                     ),
@@ -679,7 +681,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: estadoColor.withOpacity(0.15),
+                      color: estadoColor.withAlpha(38),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: estadoColor, width: 1.5),
                     ),
@@ -728,7 +730,7 @@ class _SeleccionTareaScreenState extends State<SeleccionTareaScreen> {
                   border: Border.all(color: turnoStyle.border, width: 3),
                   boxShadow: [
                     BoxShadow(
-                      color: turnoStyle.border.withOpacity(0.2),
+                      color: turnoStyle.border.withAlpha(51),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),

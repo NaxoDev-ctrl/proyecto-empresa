@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:typed_data';
 import '../services/api_service.dart';
 
 class TrazabilidadScreen extends StatefulWidget {
@@ -33,8 +32,8 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   
   // Datos de la tarea
   Map<String, dynamic>? _tarea;
-  Map<String, Map<String, dynamic>?> _reprocesosData = {}; 
-  Map<String, Map<String, dynamic>?> _mermasData = {}; 
+  final Map<String, Map<String, dynamic>?> _reprocesosData = {}; 
+  final Map<String, Map<String, dynamic>?> _mermasData = {}; 
   
   // ========================================================================
   // LISTAS DE TODAS LAS MATERIAS PRIMAS Y COLABORADORES DISPONIBLES
@@ -45,7 +44,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   // ========================================================================
   // MATERIAS PRIMAS SELECCIONADAS (pueden agregarse/eliminarse)
   // ========================================================================
-  List<String> _materiasPrimasSeleccionadas = []; // Lista de códigos
+  final List<String> _materiasPrimasSeleccionadas = []; // Lista de códigos
   
   // Gestión de colaboradores seleccionados
   List<Map<String, dynamic>> _colaboradoresSeleccionados = [];
@@ -53,11 +52,11 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
   // ========================================================================
   // DATOS Y CONTROLLERS POR MATERIA PRIMA
   // ========================================================================
-  Map<String, Map<String, dynamic>> _datosMateriasPrimas = {};
-  Map<String, TextEditingController> _loteControllers = {};
-  Map<String, TextEditingController> _consumoControllers = {};
-  Map<String, TextEditingController> _reprocesoControllers = {};
-  Map<String, TextEditingController> _mermaControllers = {};
+  final Map<String, Map<String, dynamic>> _datosMateriasPrimas = {};
+  final Map<String, TextEditingController> _loteControllers = {};
+  final Map<String, TextEditingController> _consumoControllers = {};
+  final Map<String, TextEditingController> _reprocesoControllers = {};
+  final Map<String, TextEditingController> _mermaControllers = {};
   
   Uint8List? _fotoEtiqueta;
   String? _nombreArchivoFoto;
@@ -80,12 +79,19 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
     _cantidadProducidaController.dispose();
     _observacionesController.dispose();
     _codigoColaboradorLoteController.dispose();
-    
-    _loteControllers.values.forEach((c) => c.dispose());
-    _consumoControllers.values.forEach((c) => c.dispose());
-    _reprocesoControllers.values.forEach((c) => c.dispose());
-    _mermaControllers.values.forEach((c) => c.dispose());
-    
+    for (var controller in _loteControllers.values) {
+      controller.dispose();
+    }
+
+    for (var controller in _consumoControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _reprocesoControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _mermaControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -257,6 +263,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         );
       });
       
+      if (!mounted) return; 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${mpSeleccionada['nombre']} agregada'),
@@ -458,6 +465,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
       });
       
       // Mostrar contador actualizado
+      if (!mounted) return; 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -490,6 +498,7 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return; 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al tomar foto: $e'),
@@ -509,12 +518,14 @@ class _TrazabilidadScreenState extends State<TrazabilidadScreen> {
 
       if (image != null) {
         final bytes = await image.readAsBytes();
+        if (!mounted) return; 
         setState(() {
           _fotoEtiqueta = bytes;
           _nombreArchivoFoto = image.name;
         });
       }
     } catch (e) {
+      if (!mounted) return; 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al seleccionar foto: $e'),
@@ -1842,10 +1853,21 @@ class _DialogSeleccionarColaboradorState
                       itemCount: _colaboradoresFiltrados.length,
                       itemBuilder: (context, index) {
                         final colab = _colaboradoresFiltrados[index];
-                        return ListTile(
-                          title: Text('${colab['nombre']} ${colab['apellido']}'),
-                          subtitle: Text('Código: ${colab['codigo']}'),
-                          onTap: () => Navigator.pop(context, colab),
+                        return Card(
+                          margin: EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Color.fromARGB(255, 217, 244, 205),
+                              child: Text(
+                                colab['codigo'].toString().length >= 3
+                                ? colab['codigo'].toString().substring(0, 3)
+                                : colab['codigo'].toString(),
+                                style: const TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            title: Text('${colab['nombre']} ${colab['apellido']}'),
+                            onTap: () => Navigator.pop(context, colab),
+                          ),
                         );
                       },
                     ),

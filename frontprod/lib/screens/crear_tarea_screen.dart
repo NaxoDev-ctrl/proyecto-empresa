@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontprod/screens/lista_tareas_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
@@ -98,7 +99,26 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime(2025),
       lastDate: DateTime(2080),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: primaryColorDark,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColorDark,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
+
+    if (!mounted) return;
 
     if (picked != null) {
       final filtroProvider = Provider.of<FiltroProvider>(context, listen: false);
@@ -122,7 +142,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
     if (producto != null) {
       setState(() {
         _selectedProducto = producto;
-        _unidadMedidaProducto = producto.unidadMedidaDisplay ?? 'UN';
+        _unidadMedidaProducto = producto.unidadMedidaDisplay;
       });
     }
   }
@@ -209,11 +229,10 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
       final errorMsg = e.toString().toLowerCase();
       String mensajeUsuario = 'Error al crear tarea: ';
 
-      // Detectar si es un error de tarea duplicada
       if (errorMsg.contains('conjunto único') || 
           errorMsg.contains('ya existe') ||
           errorMsg.contains('duplicad')) {
-        mensajeUsuario = '⚠️ Ya existe una tarea con esa línea, turno, fecha y producto.\n\n'
+        mensajeUsuario = 'Ya existe una tarea con esa línea, turno, fecha y producto.\n\n'
             'No se pueden crear tareas duplicadas. Verifica los datos e intenta con valores diferentes.';
       } else if (errorMsg.contains('no autorizado')) {
         mensajeUsuario = 'No tienes permisos para crear tareas';
@@ -280,20 +299,95 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             // Fecha
             Card(
               child: ListTile(
-                leading: const Icon(Icons.calendar_today),
-                title: const Text('Fecha'),
+                style: ListTileStyle.list,
+                tileColor: primaryColorLight,
+                leading: const Icon(Icons.calendar_today, color: primaryColorDark),
+                title: const Text('Fecha de Producción', style: TextStyle(color: primaryColorDark, fontWeight: FontWeight.bold)),
                 subtitle: Text(DateFormat('EEEE, d MMMM yyyy', 'es').format(_selectedDate)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                trailing: const Icon(Icons.play_arrow, size: 25, color: Color.fromARGB(255, 23, 100, 83)),
                 onTap: _seleccionarFecha,
               ),
             ),
             const SizedBox(height: 12),
 
+            // Producto
+            Card(
+              child: ListTile(
+                style: ListTileStyle.list,
+                tileColor: primaryColorLight,
+                leading: const Icon(Icons.inventory, color: primaryColorDark),
+                title: const Text('Producto', style: TextStyle(color: primaryColorDark, fontWeight: FontWeight.bold)),
+                subtitle: _selectedProducto != null
+                    ? Text('${_selectedProducto!.codigo} - ${_selectedProducto!.nombre}')
+                    : const Text('Selecciona un producto'),
+                trailing: const Icon(Icons.play_arrow, size: 25, color: Color.fromARGB(255, 23, 100, 83)),
+                onTap: _seleccionarProducto,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Meta de producción
+            TextFormField(
+              controller: _metaController,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
+                labelText: 'Meta de Producción',
+                labelStyle: TextStyle(
+                    color: Colors.grey.shade800,
+                  ),
+                floatingLabelStyle: TextStyle(
+                    color: primaryColorDark,
+                  ),
+                prefixIcon: Icon(Icons.flag, color: primaryColorDark,),
+                suffixText: _unidadMedidaProducto,
+              ),
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Ingresa la meta de producción';
+                }
+                if (int.tryParse(value) == null || int.parse(value) <= 0) {
+                  return 'Ingresa un número válido mayor a 0';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+
             // Línea
             DropdownButtonFormField<Linea>(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
                 labelText: 'Línea',
-                prefixIcon: Icon(Icons.conveyor_belt),
+                labelStyle: TextStyle(
+                  color: Colors.grey.shade800,
+                ),
+                floatingLabelStyle: TextStyle(
+                  color: primaryColorDark,
+                ),
+                prefixIcon: Icon(Icons.conveyor_belt, color: primaryColorDark),
               ),
               value: _selectedLinea,
               items: _lineas.map((linea) {
@@ -313,9 +407,27 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
 
             // Turno
             DropdownButtonFormField<Turno>(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
                 labelText: 'Turno',
-                prefixIcon: Icon(Icons.access_time),
+                labelStyle: TextStyle(
+                    color: Colors.grey.shade800,
+                  ),
+                floatingLabelStyle: TextStyle(
+                    color: primaryColorDark,
+                  ),
+                prefixIcon: Icon(Icons.access_time, color: primaryColorDark),
               ),
               value: _selectedTurno,
               items: _turnos.map((turno) {
@@ -333,50 +445,17 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Producto
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.inventory),
-                title: const Text('Producto'),
-                subtitle: _selectedProducto != null
-                    ? Text('${_selectedProducto!.codigo} - ${_selectedProducto!.nombre}')
-                    : const Text('Selecciona un producto'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: _seleccionarProducto,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Meta de producción
-            TextFormField(
-              controller: _metaController,
-              decoration: InputDecoration(
-                labelText: 'Meta de Producción',
-                prefixIcon: Icon(Icons.flag),
-                suffixText: _unidadMedidaProducto,
-              ),
-              keyboardType: TextInputType.number,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Ingresa la meta de producción';
-                }
-                if (int.tryParse(value) == null || int.parse(value) <= 0) {
-                  return 'Ingresa un número válido mayor a 0';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-
             // Colaboradores
             Card(
               child: ListTile(
-                leading: const Icon(Icons.people),
-                title: const Text('Colaboradores'),
+                style: ListTileStyle.list,
+                tileColor: primaryColorLight,
+                leading: const Icon(Icons.people, color: primaryColorDark),
+                title: const Text('Colaboradores', style: TextStyle(color: primaryColorDark, fontWeight: FontWeight.bold)),
                 subtitle: _selectedColaboradores.isEmpty
                     ? const Text('Selecciona colaboradores')
                     : Text('${_selectedColaboradores.length} seleccionados'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                trailing: const Icon(Icons.play_arrow, size: 25, color: Color.fromARGB(255, 23, 100, 83)),
                 onTap: _seleccionarColaboradores,
               ),
             ),
@@ -403,9 +482,27 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             // Observaciones
             TextFormField(
               controller: _observacionesController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
                 labelText: 'Observaciones (Opcional)',
-                prefixIcon: Icon(Icons.note),
+                labelStyle: TextStyle(
+                    color: Colors.grey.shade800,
+                  ),
+                floatingLabelStyle: TextStyle(
+                    color: primaryColorDark,
+                  ),
+                prefixIcon: Icon(Icons.note, color: primaryColorDark),
               ),
               maxLines: 3,
               maxLength: 500,
@@ -416,6 +513,7 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             SizedBox(
               height: 48,
               child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: primaryColorLight),
                 onPressed: _isLoading ? null : _guardarTarea,
                 icon: _isLoading
                     ? const SizedBox(
@@ -439,8 +537,11 @@ class _CrearTareaScreenState extends State<CrearTareaScreen> {
             SizedBox(
               height: 48,
               child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
                 onPressed: _isLoading ? null : () => Navigator.pop(context, true),
-                child: const Text('Cancelar'),
+                child: const Text('Cancelar', style: TextStyle(color: primaryColorDark, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -637,6 +738,7 @@ class _ColaboradoresDialogState extends State<_ColaboradoresDialog> {
                     final isSelected = _currentSeleccionados.contains(colaborador);
                     
                     return CheckboxListTile(
+                      activeColor: primaryColorDark, 
                       title: Text(colaborador.nombreCompleto),
                       subtitle: Text('Código: ${colaborador.codigo}'),
                       value: isSelected,
@@ -666,8 +768,9 @@ class _ColaboradoresDialogState extends State<_ColaboradoresDialog> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
                       onPressed: () => Navigator.pop(context, _currentSeleccionados.toList()),
-                      child: Text('Confirmar (${_currentSeleccionados.length})'),
+                      child: Text('Confirmar (${_currentSeleccionados.length})', style: const TextStyle(color: Colors.white)),
                     ),
                   ),
                 ],

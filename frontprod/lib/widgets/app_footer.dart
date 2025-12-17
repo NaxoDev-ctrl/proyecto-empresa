@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 // Widget reutilizable para el footer (pie de página)
 class AppFooter extends StatelessWidget {
+  const AppFooter({super.key});
 
   @override
   Widget build(BuildContext context) {

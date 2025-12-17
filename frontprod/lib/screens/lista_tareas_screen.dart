@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:frontprod/models/producto.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
@@ -100,19 +99,19 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2024),
+      firstDate: DateTime(2025),
       lastDate: DateTime(2080),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: ColorScheme.light(
-              primary: primaryColorDark, // Color del encabezado y botones
-              onPrimary: Colors.white, // Color del texto en el encabezado
-              onSurface: Colors.black, // Color de los textos en el calendario
+              primary: primaryColorDark,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
             ),
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
-                foregroundColor: primaryColorDark, // Color de los botones de acción
+                foregroundColor: primaryColorDark,
               ),
             ),
           ),
@@ -120,6 +119,8 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
         );
       },
     );
+    
+    if (!mounted) return; 
 
     if (picked != null && picked != _selectedDate) {
       final filtroProvider = Provider.of<FiltroProvider>(context, listen: false);
@@ -311,7 +312,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
             Icon(
               Icons.inbox,
               size: 64,
-              color: primaryColorDark.withOpacity(0.5), 
+              color: primaryColorDark.withAlpha(128), 
             ),
             const SizedBox(height: 16),
             Text(
@@ -372,7 +373,6 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
                   ),
                 );
 
-                // Si se actualizó la tarea, recargar la lista
                 if (resultado == true) {
                   _cargarTareas();
                 }
@@ -414,7 +414,7 @@ class _ListaTareasScreenState extends State<ListaTareasScreen> with AutomaticKee
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getEstadoColor(tarea.estado).withOpacity(0.15),
+                        color: _getEstadoColor(tarea.estado).withAlpha(38),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: estadoColor, width: 1.5),
                       ),

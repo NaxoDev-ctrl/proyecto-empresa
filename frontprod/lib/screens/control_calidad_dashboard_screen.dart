@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:frontprod/screens/lista_tareas_screen.dart';
 import 'package:frontprod/services/api_service.dart';
 import 'firma_control_calidad_screen.dart';
 import 'home_screen.dart';
@@ -41,6 +40,7 @@ class _ControlCalidadDashboardState extends State<ControlCalidadDashboard> {
         
         // Si falla, cerrar sesión y volver al home
         await _apiService.logout();
+        if (!mounted) return; 
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const HomeScreen()),
           (route) => false,
@@ -94,7 +94,6 @@ class _ControlCalidadDashboardState extends State<ControlCalidadDashboard> {
         centerTitle: true,
 
         actions: [
-          // Información del usuario
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Center(
@@ -120,7 +119,6 @@ class _ControlCalidadDashboardState extends State<ControlCalidadDashboard> {
               ),
             ),
           ),
-          // Botón de logout
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar sesión',
@@ -129,7 +127,7 @@ class _ControlCalidadDashboardState extends State<ControlCalidadDashboard> {
         ],
       ),
       
-      body: const FirmaControlCalidadScreen(), // ✅ Directamente la pantalla principal
+      body: const FirmaControlCalidadScreen(),
     );
   }
   Future<void> _cerrarSesion() async {
@@ -141,29 +139,27 @@ class _ControlCalidadDashboardState extends State<ControlCalidadDashboard> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar', style: TextStyle(color: primaryColorDark)),
+            child: const Text('Cancelar'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColorLight,
+              backgroundColor: Colors.green,
             ),
-            child: const Text('Cerrar Sesión', style: TextStyle(color: primaryColorDark)),
+            child: const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
 
     if (confirmar == true && mounted) {
-      // Cerrar sesión (eliminar token)
       await _apiService.logout();
       
       if (!mounted) return;
-      
-      // Volver al HomeScreen
+
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const HomeScreen()),
-        (route) => false, // Eliminar todas las rutas anteriores
+        (route) => false,
       );
     }
   }

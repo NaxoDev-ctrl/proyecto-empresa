@@ -8,9 +8,9 @@ class DetalleHojaProcesosSupervisorScreen extends StatefulWidget {
   final int hojaProcesosId;
 
   const DetalleHojaProcesosSupervisorScreen({
-    Key? key,
+    super.key,
     required this.hojaProcesosId,
-  }) : super(key: key);
+  });
 
   @override
   State<DetalleHojaProcesosSupervisorScreen> createState() =>

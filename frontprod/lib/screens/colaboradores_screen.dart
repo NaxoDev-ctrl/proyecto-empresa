@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel_pkg;
+import 'package:frontprod/screens/detalle_trazabilidad_screen.dart';
 import '../services/api_service.dart';
 import '../models/colaborador.dart';
 
@@ -270,7 +271,7 @@ class _ColaboradoresScreenState extends State<ColaboradoresScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Entendido'),
+            child: const Text('Entendido', style: TextStyle(color: primaryColorDark),),
           ),
         ],
       ),
@@ -307,9 +308,12 @@ class _ColaboradoresScreenState extends State<ColaboradoresScreen> {
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColorDark,
+                      ),
                       onPressed: _cargarDesdeExcel,
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text('Cargar Excel'),
+                      icon: const Icon(Icons.upload_file, color: Colors.white),
+                      label: const Text('Cargar Excel', style: TextStyle(color: Colors.white)),
                     ),
                     const SizedBox(width: 8),
                     IconButton(
@@ -476,7 +480,7 @@ class _DialogConfirmacionCarga extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                '📋 Se cargarán ${colaboradores.length} colaboradores',
+                'Se cargarán ${colaboradores.length} colaboradores',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,

@@ -23,7 +23,7 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
   Map<String, dynamic>? _hojaProcesos;
   List<dynamic> _eventos = [];
   List<dynamic> _tiposEventos = [];
-  List<dynamic> _maquinas = [];
+  //List<dynamic> _maquinas = [];
   
   bool _isLoading = true;
   bool _isCreatingEvent = false;
@@ -60,12 +60,12 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
       final tiposEventosData = await _apiService.getTiposEventos();
       
       // Cargar máquinas
-      final maquinasData = await _apiService.getMaquinas();
+      //final maquinasData = await _apiService.getMaquinas();
 
       setState(() {
         _tarea = tareaData;
         _tiposEventos = tiposEventosData;
-        _maquinas = maquinasData;
+        //_maquinas = maquinasData;
       });
 
       // Verificar si ya existe hoja de procesos
@@ -257,6 +257,8 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
 
     if (confirmar != true) return;
 
+    if (!mounted) return; 
+
     // Mostrar loading
     showDialog(
       context: context,
@@ -302,13 +304,11 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
         horaFin: DateTime.now().toIso8601String(),
       );
 
-      // Finalizar hoja de procesos
       await _apiService.finalizarHojaProcesos(_hojaProcesos!['id']);
 
       if (!mounted) return;
-      Navigator.pop(context); // Cerrar loading
+      Navigator.pop(context);
 
-      // Navegar a trazabilidad
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -321,7 +321,7 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
 
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Cerrar loading
+      Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -455,13 +455,12 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
       ),
       body: Column(
         children: [
-          // Header con info de tarea
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
+                  color: Colors.black.withAlpha(38),
                   blurRadius: 6,
                   offset: Offset(0, 4),
                 ),
@@ -472,15 +471,12 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
 
           const SizedBox(height: 10),
 
-          // Cronómetro
           _buildCronometro(),
 
-          // Lista de eventos
           Expanded(
             child: _buildEventos(),
           ),
 
-          // Botones de acción
           _buildBotones(),
         ],
       ),
@@ -511,6 +507,7 @@ class _HojaProcesosScreenState extends State<HojaProcesosScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
+              Icon(Icons.conveyor_belt, size: 16),
               Text(_tarea!['linea_detalle']['nombre']),
               const SizedBox(width: 16),
               Icon(Icons.access_time, size: 16),

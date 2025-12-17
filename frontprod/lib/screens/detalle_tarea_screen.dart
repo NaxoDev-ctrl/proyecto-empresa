@@ -318,7 +318,7 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
             _buildInfoRow(
               Icons.flag,
               'Meta de Producción',
-              '${_tarea!['meta_produccion']} unidades',
+              '${_tarea!['meta_produccion']} ${_tarea!['producto_detalle']['unidad_medida_display']}',
             ),
           ],
         ),
@@ -422,12 +422,13 @@ class _DetalleTareaScreenState extends State<DetalleTareaScreen> {
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
+                  backgroundColor: Color.fromARGB(255, 217, 244, 205),
                   child: Text(
-                    colaborador['codigo'].toString().substring(0, 2).toUpperCase(),
+                    colaborador['codigo'].toString().substring(0, 3).toUpperCase(),
+                    style: const TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold),
                   ),
                 ),
                 title: Text(colaborador['nombre_completo']),
-                subtitle: Text('Código: ${colaborador['codigo']}'),
               );
             }),
           ],

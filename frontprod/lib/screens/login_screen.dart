@@ -51,6 +51,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final userData = await _apiService.getCurrentUser();
       final rol = userData['rol'];
+      
+      if (!mounted) return; 
 
       if (rol == 'supervisor') {
         Navigator.pushReplacement(

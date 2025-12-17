@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontprod/screens/lista_tareas_screen.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
 import '../models/linea.dart';
@@ -35,6 +36,7 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
   Turno? _selectedTurno;
   Producto? _selectedProducto;
   List<Colaborador> _selectedColaboradores = [];
+  String _unidadMedidaProducto = 'UN';
 
   // Listas de opciones
   List<Linea> _lineas = [];
@@ -162,8 +164,25 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2024),
+      firstDate: DateTime(2025),
       lastDate: DateTime(2080),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: primaryColorDark,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColorDark,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null) {
@@ -185,6 +204,7 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
     if (producto != null) {
       setState(() {
         _selectedProducto = producto;
+        _unidadMedidaProducto = producto.unidadMedidaDisplay;
       });
     }
   }
@@ -374,20 +394,95 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
             // Fecha
             Card(
               child: ListTile(
-                leading: const Icon(Icons.calendar_today),
-                title: const Text('Fecha'),
+                style: ListTileStyle.list,
+                tileColor: primaryColorLight,
+                leading: const Icon(Icons.calendar_today, color: primaryColorDark,),
+                title: const Text('Fecha de Producción', style: TextStyle(color: primaryColorDark, fontWeight: FontWeight.bold)),
                 subtitle: Text(DateFormat('EEEE, d MMMM yyyy', 'es').format(_selectedDate)),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                trailing: const Icon(Icons.play_arrow, size: 25, color: Color.fromARGB(255, 23, 100, 83)),
                 onTap: _seleccionarFecha,
               ),
             ),
             const SizedBox(height: 12),
 
+            // Producto
+            Card(
+              child: ListTile(
+                style: ListTileStyle.list,
+                tileColor: primaryColorLight,
+                leading: const Icon(Icons.inventory, color: primaryColorDark,),
+                title: const Text('Producto', style: TextStyle(color: primaryColorDark, fontWeight: FontWeight.bold)),
+                subtitle: _selectedProducto != null
+                    ? Text('${_selectedProducto!.codigo} - ${_selectedProducto!.nombre}')
+                    : const Text('Selecciona un producto'),
+                trailing: const Icon(Icons.play_arrow, size: 25, color: Color.fromARGB(255, 23, 100, 83)),
+                onTap: _seleccionarProducto,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Meta de producción
+            TextFormField(
+              controller: _metaController,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
+                labelText: 'Meta de Producción',
+                labelStyle: TextStyle(
+                    color: Colors.grey.shade800,
+                  ),
+                floatingLabelStyle: TextStyle(
+                    color: primaryColorDark,
+                  ),
+                prefixIcon: Icon(Icons.flag, color: primaryColorDark,),
+                suffixText: _unidadMedidaProducto,
+              ),
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Ingresa la meta de producción';
+                }
+                if (int.tryParse(value) == null || int.parse(value) <= 0) {
+                  return 'Ingresa un número válido mayor a 0';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+
             // Línea
             DropdownButtonFormField<Linea>(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
                 labelText: 'Línea',
-                prefixIcon: Icon(Icons.conveyor_belt),
+                labelStyle: TextStyle(
+                    color: Colors.grey.shade800,
+                  ),
+                floatingLabelStyle: TextStyle(
+                    color: primaryColorDark,
+                  ),
+                prefixIcon: Icon(Icons.conveyor_belt, color: primaryColorDark),
               ),
               value: _selectedLinea,
               items: _lineas.map((linea) {
@@ -407,9 +502,27 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
 
             // Turno
             DropdownButtonFormField<Turno>(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
                 labelText: 'Turno',
-                prefixIcon: Icon(Icons.access_time),
+                labelStyle: TextStyle(
+                    color: Colors.grey.shade800,
+                  ),
+                floatingLabelStyle: TextStyle(
+                    color: primaryColorDark,
+                  ),
+                prefixIcon: Icon(Icons.access_time, color: primaryColorDark),
               ),
               value: _selectedTurno,
               items: _turnos.map((turno) {
@@ -427,50 +540,17 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Producto
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.inventory),
-                title: const Text('Producto'),
-                subtitle: _selectedProducto != null
-                    ? Text('${_selectedProducto!.codigo} - ${_selectedProducto!.nombre}')
-                    : const Text('Selecciona un producto'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: _seleccionarProducto,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Meta de producción
-            TextFormField(
-              controller: _metaController,
-              decoration: const InputDecoration(
-                labelText: 'Meta de Producción',
-                prefixIcon: Icon(Icons.flag),
-                suffixText: 'unidades',
-              ),
-              keyboardType: TextInputType.number,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Ingresa la meta de producción';
-                }
-                if (int.tryParse(value) == null || int.parse(value) <= 0) {
-                  return 'Ingresa un número válido mayor a 0';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-
             // Colaboradores
             Card(
               child: ListTile(
-                leading: const Icon(Icons.people),
-                title: const Text('Colaboradores'),
+                style: ListTileStyle.list,
+                tileColor: primaryColorLight,
+                leading: const Icon(Icons.people, color: primaryColorDark),
+                title: const Text('Colaboradores', style: TextStyle(color: primaryColorDark, fontWeight: FontWeight.bold)),
                 subtitle: _selectedColaboradores.isEmpty
                     ? const Text('Selecciona colaboradores')
                     : Text('${_selectedColaboradores.length} seleccionados'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                trailing: const Icon(Icons.play_arrow, size: 25, color: Color.fromARGB(255, 23, 100, 83)),
                 onTap: _seleccionarColaboradores,
               ),
             ),
@@ -497,40 +577,73 @@ class _EditarTareaScreenState extends State<EditarTareaScreen> {
             // Observaciones
             TextFormField(
               controller: _observacionesController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
                 labelText: 'Observaciones (Opcional)',
-                prefixIcon: Icon(Icons.note),
+                labelStyle: TextStyle(
+                    color: Colors.grey.shade800,
+                  ),
+                floatingLabelStyle: TextStyle(
+                    color: primaryColorDark,
+                  ),
+                prefixIcon: Icon(Icons.note, color: primaryColorDark),
               ),
               maxLines: 3,
               maxLength: 500,
             ),
             const SizedBox(height: 24),
 
-            // Botones
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _isLoading ? null : () => Navigator.pop(context),
-                    child: const Text('Cancelar'),
+            // Botones Guardar y Cancelar
+            SizedBox(
+              height: 48,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: primaryColorLight),
+                onPressed: _isLoading ? null : _guardarCambios,
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: primaryColorDark),
+                      )
+                    : const Icon(Icons.save, color: primaryColorDark),
+                label: Text(
+                  _isLoading ? 'Guardando...' : 'Guardar Cambios',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: primaryColorDark
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _guardarCambios,
-                    icon: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save),
-                    label: Text(_isLoading ? 'Guardando...' : 'Guardar Cambios'),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: primaryColorDark, width: 2.0),
+                ),
+                onPressed: _isLoading ? null : () => Navigator.pop(context, true),
+                child: const Text(
+                  'Cancelar',
+                  style: TextStyle(
+                    color: primaryColorDark,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ],
+              ),
             ),
           ],
         ),
@@ -638,6 +751,7 @@ class _ColaboradoresDialogState extends State<_ColaboradoresDialog> {
                   final isSelected = _seleccionados.any((c) => c.id == colaborador.id);
                   
                   return CheckboxListTile(
+                    activeColor: primaryColorDark, 
                     title: Text(colaborador.nombreCompleto),
                     subtitle: Text('Código: ${colaborador.codigo}'),
                     value: isSelected,
@@ -667,8 +781,9 @@ class _ColaboradoresDialogState extends State<_ColaboradoresDialog> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: primaryColorDark),
                       onPressed: () => Navigator.pop(context, _seleccionados),
-                      child: Text('Confirmar (${_seleccionados.length})'),
+                      child: Text('Confirmar (${_seleccionados.length})', style: const TextStyle(color: Colors.white)),
                     ),
                   ),
                 ],

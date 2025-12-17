@@ -45,6 +45,7 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         
         // Si falla, cerrar sesión y volver al home
         await _apiService.logout();
+        if (!mounted) return; 
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const HomeScreen()),
           (route) => false,
@@ -68,9 +69,8 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
 
     final screens = [
       ListaTareasScreen(key: ValueKey(_refreshKey)),
-      ColaboradoresScreen(key: ValueKey(_refreshKey)),
       FirmaSupervisorScreen(key: ValueKey(_refreshKey)),
-      const Center(child: Text('Reportes (Próximamente)')),
+      ColaboradoresScreen(key: ValueKey(_refreshKey)),
     ];
 
     return Scaffold(
@@ -153,17 +153,15 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
             icon: Icon(Icons.assignment),
             label: 'Tareas',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.people),
-            label: 'Colaboradores',
-          ),
+
           NavigationDestination(
             icon: Icon(Icons.bar_chart),
             label: 'Trazabilidad',
           ),
+
           NavigationDestination(
-            icon: Icon(Icons.bar_chart),
-            label: 'Reportes',
+            icon: Icon(Icons.people),
+            label: 'Colaboradores',
           ),
         ],
       ),
@@ -180,14 +178,14 @@ class _SupervisorDashboardState extends State<SupervisorDashboard> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar', style: TextStyle(color: primaryColorDark)),
+            child: const Text('Cancelar'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColorLight,
+              backgroundColor: Colors.green,
             ),
-            child: const Text('Cerrar Sesión', style: TextStyle(color: primaryColorDark)),
+            child: const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

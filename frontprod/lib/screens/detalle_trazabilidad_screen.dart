@@ -1,8 +1,3 @@
-// ============================================================================
-// PANTALLA: Detalle de Trazabilidad para Supervisor - VERSIÓN CORREGIDA
-// ============================================================================
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -12,20 +7,20 @@ import 'detalle_hoja_procesos_screen.dart';
 
 
 const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
-class DetalleTrazabilidadSupervisorScreen extends StatefulWidget {
+class DetalleTrazabilidadScreen extends StatefulWidget {
   final int trazabilidadId;
 
-  const DetalleTrazabilidadSupervisorScreen({
-    Key? key,
+  const DetalleTrazabilidadScreen({
+    super.key,
     required this.trazabilidadId,
-  }) : super(key: key);
+  });
 
   @override
-  State<DetalleTrazabilidadSupervisorScreen> createState() =>
-      _DetalleTrazabilidadSupervisorScreenState();
+  State<DetalleTrazabilidadScreen> createState() =>
+      _DetalleTrazabilidadScreenState();
 }
 
-class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilidadSupervisorScreen> {
+class _DetalleTrazabilidadScreenState extends State<DetalleTrazabilidadScreen> {
   // ========== ESTADO ==========
   bool _isLoading = true;
   bool _isSaving = false;
@@ -43,9 +38,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
 }
 
   // ========== DATOS ORIGINALES (para revertir cambios) ==========
-  Map<String, Map<String, dynamic>> _materiasPrimasOriginales = {};
-  List<Map<String, dynamic>> _reprocesosOriginales = [];
-  List<Map<String, dynamic>> _mermasOriginales = [];
+  final Map<String, Map<String, dynamic>> _materiasPrimasOriginales = {};
   List<Map<String, dynamic>> _colaboradoresOriginales = [];
   String _cantidadProducidaOriginal = '';
   String _observacionesOriginal = '';
@@ -111,10 +104,18 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
     _cantidadProducidaController.dispose();
     _observacionesController.dispose();
     _codigoColaboradorLoteController.dispose();
-    _loteControllers.values.forEach((c) => c.dispose());
-    _consumoControllers.values.forEach((c) => c.dispose());
-    _reprocesoControllers.values.forEach((c) => c.dispose());
-    _mermaControllers.values.forEach((c) => c.dispose());
+    for (var controller in _loteControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _consumoControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _reprocesoControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _mermaControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -126,17 +127,13 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
     });
 
     try {
-      // 1️⃣ Cargar usuario actual
       final usuario = await _apiService.getCurrentUser();
-      
-      // 2️⃣ Cargar trazabilidad
       await _cargarTrazabilidadInternal();
 
       setState(() {
         _usuario = usuario;
       });
 
-      print('✅ Usuario cargado: ${usuario['username']} - Rol: ${usuario['rol']}');
     } catch (e) {
       setState(() {
         _error = 'Error al cargar datos: $e';
@@ -183,10 +180,18 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
         _materiasPrimasOriginales.clear();
         _datosMateriasPrimas.clear();
 
-        _loteControllers.values.forEach((c) => c.dispose());
-        _consumoControllers.values.forEach((c) => c.dispose());
-        _reprocesoControllers.values.forEach((c) => c.dispose());
-        _mermaControllers.values.forEach((c) => c.dispose());
+        for (var controller in _loteControllers.values) {
+          controller.dispose();
+        }
+        for (var controller in _consumoControllers.values) {
+          controller.dispose();
+        }
+        for (var controller in _reprocesoControllers.values) {
+          controller.dispose();
+        }
+        for (var controller in _mermaControllers.values) {
+          controller.dispose();
+        }
         
         _loteControllers.clear();
         _consumoControllers.clear();
@@ -371,7 +376,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withAlpha(26),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color, width: 2),
       ),
@@ -758,7 +763,8 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
           'requiere_lote': mpSeleccionada['requiere_lote'],
         };
       });
-      
+
+      if (!mounted) return; 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${mpSeleccionada['nombre']} agregada'),
@@ -820,7 +826,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
               );
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Eliminar'),
+            child: Text('Eliminar', style: TextStyle(color: Colors.white),),
           ),
         ],
       ),
@@ -886,6 +892,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
         });
       }
     } catch (e) {
+      if (!mounted) return; 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al tomar foto: $e'),
@@ -911,6 +918,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
         });
       }
     } catch (e) {
+      if (!mounted) return; 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al seleccionar foto: $e'),
@@ -973,7 +981,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
             ),
-            child: const Text('Firmar'),
+            child: const Text('Firmar', style: TextStyle(color: Colors.white),),
           ),
         ],
       ),
@@ -982,6 +990,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
     if (confirmar != true) return;
 
     // Mostrar loading
+    if (!mounted) return; 
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1038,11 +1047,11 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
     if (nuevoEstado == 'retenido') {
       motivoRetencion = await _mostrarDialogoMotivoRetencion();
       if (motivoRetencion == null || motivoRetencion.isEmpty) {
-        return; // Usuario canceló o no ingresó motivo
+        return;
       }
     }
 
-    // Confirmar acción
+    if (!mounted) return; 
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1062,7 +1071,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
             style: ElevatedButton.styleFrom(
               backgroundColor: nuevoEstado == 'liberado' ? Colors.green : Colors.red,
             ),
-            child: Text(nuevoEstado == 'liberado' ? 'Liberar' : 'Retener'),
+            child: Text(nuevoEstado == 'liberado' ? 'Liberar' : 'Retener', style: const TextStyle(color: Colors.white),),
           ),
         ],
       ),
@@ -1070,7 +1079,8 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
 
     if (confirmar != true) return;
 
-    // Mostrar loading
+    if (!mounted) return; 
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1087,7 +1097,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
       );
 
       if (!mounted) return;
-      Navigator.pop(context); // Cerrar loading
+      Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1164,7 +1174,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
             ),
-            child: const Text('Retener'),
+            child: const Text('Retener', style: TextStyle(color: Colors.white),),
           ),
         ],
       ),
@@ -1195,27 +1205,17 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
     if (fechaElabRaw != null) {
       DateTime fechaDateTime;
       
-      // Parsear según formato recibido
       if (fechaElabRaw.toString().contains('-') && fechaElabRaw.toString().length == 10) {
-        // Formato: YYYY-MM-DD (desde el backend)
         fechaDateTime = DateTime.parse(fechaElabRaw.toString());
       } else if (fechaElabRaw.toString().contains('-') && fechaElabRaw.toString().contains('T')) {
-        // Formato ISO completo: YYYY-MM-DDTHH:MM:SS
         fechaDateTime = DateTime.parse(fechaElabRaw.toString());
       } else {
-        // Intentar parseo directo
         fechaDateTime = DateTime.parse(fechaElabRaw.toString());
       }
-      
-      // Formatear a DD/MM/YYYY
       fechaElaboracion = DateFormat('dd/MM/yyyy').format(fechaDateTime);
     }
   } catch (e) {
-    print('❌ Error al formatear fecha de elaboración: $e');
-    print('   Fecha raw: ${_tarea!['fecha_elaboracion_real'] ?? _tarea!['fecha']}');
-    fechaElaboracion = _tarea!['fecha_elaboracion_real']?.toString() ?? 
-                      _tarea!['fecha']?.toString() ?? 
-                      'N/A';
+    fechaElaboracion = _tarea!['fecha_elaboracion_real']?.toString() ?? _tarea!['fecha']?.toString() ?? 'N/A';
   }
 
   return Card(
@@ -1233,7 +1233,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('F. ELAB.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    Text(fechaElaboracion ?? ''),
+                    Text(fechaElaboracion),
                   ],
                 ),
               ),
@@ -1351,18 +1351,14 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
             height: 50,
             child: OutlinedButton.icon(
               onPressed: () {
-                // Manejo robusto: puede ser int o Map
                 final hojaProcesos = _trazabilidad!['hoja_procesos'];
                 final int hojaProcesosId;
                 
                 if (hojaProcesos is int) {
-                  // Si es un entero directo
                   hojaProcesosId = hojaProcesos;
                 } else if (hojaProcesos is Map) {
-                  // Si es un objeto con id
                   hojaProcesosId = hojaProcesos['id'] as int;
                 } else {
-                  // Fallback (no debería llegar aquí)
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('No se pudo obtener ID de hoja de procesos'),
@@ -1894,7 +1890,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
                             fit: BoxFit.cover,
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
-                              return Container(
+                              return SizedBox(
                                 height: 400,
                                 child: Center(
                                   child: CircularProgressIndicator(
@@ -2102,17 +2098,17 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
                   margin: EdgeInsets.only(bottom: 12),
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: esSupervisor ? Colors.green[50] : Colors.blue[50],
+                    color: esSupervisor ? Colors.green[50] : Colors.green[50],
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: esSupervisor ? Colors.green[200]! : Colors.blue[200]!,
+                      color: esSupervisor ? Colors.green[200]! : Colors.green[200]!,
                     ),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.verified,
-                        color: esSupervisor ? Colors.green : Colors.blue,
+                        color: esSupervisor ? Colors.green : Colors.green,
                       ),
                       SizedBox(width: 12),
                       Expanded(
@@ -2123,7 +2119,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
                               esSupervisor ? 'Supervisor' : 'Control de Calidad',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: esSupervisor ? Colors.green[700] : Colors.blue[700],
+                                color: esSupervisor ? Colors.green[700] : Colors.green[700],
                               ),
                             ),
                             Text(
@@ -2323,7 +2319,7 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
                   style: TextStyle(color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: Colors.green,
                   padding: EdgeInsets.all(16),
                 ),
               ),
@@ -2501,11 +2497,6 @@ class _DetalleTrazabilidadSupervisorScreenState extends State<DetalleTrazabilida
       );
     }
 
-    final firmas = _trazabilidad!['firmas'] as List? ?? [];
-    final tieneFirmaSupervisor = firmas.any(
-      (f) => f is Map && f['tipo_firma'] == 'supervisor',
-    );
-
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 70, 
@@ -2650,19 +2641,19 @@ class _DialogSeleccionarColaboradorState
                         final colab = _colaboradoresFiltrados[index];
                         final nombreCompleto = 
                             '${colab['nombre']} ${colab['apellido']}';
-                        
                         return Card(
                           margin: EdgeInsets.only(bottom: 8),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: Colors.indigo,
+                              backgroundColor: Color.fromARGB(255, 217, 244, 205),
                               child: Text(
-                                colab['nombre'].toString()[0].toUpperCase(),
-                                style: TextStyle(color: Colors.white),
+                                colab['codigo'].toString().length >= 3
+                                ? colab['codigo'].toString().substring(0, 3)
+                                : colab['codigo'].toString(),
+                                style: const TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold),
                               ),
                             ),
                             title: Text(nombreCompleto),
-                            subtitle: Text('Código: ${colab['codigo']}'),
                             onTap: () => Navigator.pop(context, colab),
                           ),
                         );

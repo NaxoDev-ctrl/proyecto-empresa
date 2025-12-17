@@ -15,9 +15,9 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
   List<Linea> _lineas = [];
   bool _isLoading = true;
   String? _error;
-  final Color _primaryColor = const Color(0xFF891D43); // Guinda/Vino
-  final Color _onPrimaryColor = const Color(0xFFFFD9C6); // Crema/Durazno claro para texto
-  final Color _cardColor = const Color(0xFFFFEFE9); // Fondo de la tarjeta (crema más claro)
+  final Color _primaryColor = const Color(0xFF891D43);
+  final Color _onPrimaryColor = const Color(0xFFFFD9C6);
+  final Color _cardColor = const Color(0xFFFFEFE9); // Fondo de la tarjeta
   final Color _cardTextColor = const Color(0xFF5A102A);
   final Map<String, String> _lineaImageAssets = {
     'L1': 'assets/images/logo_entrelagos2.png',
@@ -68,12 +68,9 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
     return Scaffold(
       backgroundColor: _primaryColor,
       body: SafeArea(
-        // Usamos CustomScrollView para tener un header fijo y un cuerpo deslizable
         child: CustomScrollView(
           slivers: [
             _buildHeaderFijo(context),
-            
-            // Contenido deslizable
             SliverFillRemaining(
               hasScrollBody: true,
               child: Container(
@@ -85,7 +82,7 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withAlpha(26),
                       blurRadius: 10,
                       offset: const Offset(0, -5),
                     ),
@@ -122,7 +119,6 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
         ),
       ),
       
-      // Título Central
       title: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -148,7 +144,6 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
       ),
       centerTitle: true,
       
-      // Logo (derecha)
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 16.0),
@@ -242,7 +237,6 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
   }
 
   Widget _buildLineaCard(Linea linea) {
-    // 1. Obtener la ruta de la imagen si existe
     final String? imagePath = _lineaImageAssets[linea.nombre];
     
     return Card(
@@ -250,32 +244,28 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      clipBehavior: Clip.antiAlias, // Necesario para que el InkWell y el Container respeten el borderRadius
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _seleccionarLinea(linea),
         child: Container(
-          // Define el fondo del Container para incluir la imagen alineada a la izquierda
           decoration: BoxDecoration(
-            color: _cardColor, // Color base de la tarjeta (crema)
+            color: _cardColor,
             borderRadius: BorderRadius.circular(16),
             image: imagePath != null
                 ? DecorationImage(
-                    // Insertamos la imagen. Solo ocupará la porción necesaria a la izquierda
                     image: AssetImage(imagePath),
                     fit: BoxFit.cover,
-                    alignment: Alignment.centerLeft, // La clave: alinea la imagen a la izquierda
-                    // Opcional: Usamos ColorFilter para aclarar/blanquear la imagen y que el texto se lea mejor
+                    alignment: Alignment.centerLeft,
                     colorFilter: ColorFilter.mode(
-                      _cardColor.withOpacity(0.4), // Tinte suave del color de la tarjeta
+                      _cardColor.withAlpha(102),
                       BlendMode.srcATop,
                     ),
                   )
-                : null, // Sin imagen si no está definida
+                : null,
           ),
-          child: Stack( // Usamos Stack para superponer el gradiente (difuminado) y el texto
+          child: Stack(
             fit: StackFit.expand,
             children: [
-              // 2. Capa de Gradiente Horizontal (para lograr el difuminado hacia la derecha)
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -283,12 +273,10 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                       colors: [
-                        // Gradiente que va de transparente (sobre la imagen) a opaco (sobre el texto central)
-                        // Esto crea el efecto de desvanecimiento suave de la imagen.
-                        _cardColor.withOpacity(0.0), 
-                        _cardColor.withOpacity(0.6), // Transición más suave
-                        _cardColor.withOpacity(0.95), // Casi sólido en el centro
-                        _cardColor, // Sólido a la derecha
+                        _cardColor.withAlpha(0), 
+                        _cardColor.withAlpha(15),
+                        _cardColor.withAlpha(243),
+                        _cardColor,
                       ],
                       stops: const [0.0, 0.4, 0.7, 1.0],
                     ),
@@ -296,23 +284,21 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
                 ),
               ),
               
-              // 3. Contenido Central (Texto y Descripción) - Capa superior
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Título de Línea (Ej. L1)
                       Text(
                         linea.nombre,
                         style: TextStyle(
                           fontSize: 48,
                           fontWeight: FontWeight.w900,
                           color: _cardTextColor,
-                          shadows: [ // Sombra para mejorar la lectura sobre el fondo
+                          shadows: [
                             Shadow(
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withAlpha(204),
                               blurRadius: 4,
                             ),
                           ],
@@ -320,13 +306,12 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
                         textAlign: TextAlign.center,
                       ),
                       
-                      // Descripción
                       if (linea.descripcion != null && linea.descripcion!.isNotEmpty)
                         Text(
                           linea.descripcion!,
                           style: TextStyle(
                             fontSize: 14,
-                            color: _cardTextColor.withOpacity(0.8),
+                            color: _cardTextColor.withAlpha(204),
                             fontWeight: FontWeight.w500,
                           ),
                           textAlign: TextAlign.center,

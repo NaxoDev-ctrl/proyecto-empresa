@@ -6,9 +6,9 @@ import 'package:mime/mime.dart';
 
 class ApiService {
   // IMPORTANTE: Cambia esta URL según tu configuración
-  // Para dispositivo físico (casa naxo): 'http://192.168.1.21:8000/api'
+  // Para dispositivo físico (casa naxo): 'http://192.168.1.32:8000/api'
   // Para ejecutar en formato web:'http://127.0.0.1:8000/api'
-  static const String baseUrl = 'http://192.168.1.32:8000/api';
+  static const String baseUrl = 'http://127.0.0.1:8000/api';
 
   // Singleton pattern
   static final ApiService _instance = ApiService._internal();

@@ -1,15 +1,14 @@
-// ============================================================================
-// PANTALLA: Lista de Trazabilidades para Control de Calidad
-// ============================================================================
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
-import 'detalle_trazabilidad_supervisor_screen.dart';
+import 'detalle_trazabilidad_screen.dart';
 
 const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 
 class FirmaControlCalidadScreen extends StatefulWidget {
-  const FirmaControlCalidadScreen({Key? key}) : super(key: key);
+  const FirmaControlCalidadScreen({
+    super.key,
+  });
 
   @override
   State<FirmaControlCalidadScreen> createState() => _FirmaControlCalidadScreenState();
@@ -38,9 +37,12 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
 
   final ApiService _apiService = ApiService();
 
+  bool _filtrosExpandidos = true;
+
   @override
   void initState() {
     super.initState();
+    _fechaSeleccionada = DateTime.now();
     _inicializar();
   }
 
@@ -66,7 +68,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
         _turnos = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
-      print('Error al cargar turnos: $e');
+      debugPrint('Error al cargar turnos: $e');
     }
   }
 
@@ -78,7 +80,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
         _lineas = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
-      print('Error al cargar líneas: $e');
+      debugPrint('Error al cargar líneas: $e');
     }
   }
 
@@ -90,7 +92,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
         _productos = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
-      print('Error al cargar productos: $e');
+      debugPrint('Error al cargar productos: $e');
     }
   }
 
@@ -154,6 +156,41 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
     _cargarTrazabilidades();
   }
 
+  // ========== CONSTRUIR RESUMEN DE FILTROS ==========
+  String _construirResumenFiltros() {
+    final filtrosActivos = <String>[];
+    
+    if (_fechaSeleccionada != null) {
+      filtrosActivos.add('Fecha: ${DateFormat('dd/MM/yy').format(_fechaSeleccionada!)}');
+    }
+    
+    if (_julianoFiltro != null && _julianoFiltro!.isNotEmpty) {
+      filtrosActivos.add('Juliano: $_julianoFiltro');
+    }
+    
+    if (_turnoSeleccionado != null) {
+      final turno = _turnos.firstWhere(
+        (t) => t['id'] == _turnoSeleccionado,
+        orElse: () => {'nombre': 'Turno'},
+      );
+      filtrosActivos.add(turno['nombre']?.toString() ?? 'Turno');
+    }
+    
+    if (_lineaSeleccionada != null) {
+      final linea = _lineas.firstWhere(
+        (l) => l['id'] == _lineaSeleccionada,
+        orElse: () => {'nombre': 'Línea'},
+      );
+      filtrosActivos.add(linea['nombre']?.toString() ?? 'Línea');
+    }
+    
+    if (_productoSeleccionado != null) {
+      filtrosActivos.add('Producto: $_productoSeleccionado');
+    }
+    
+    return filtrosActivos.join(' • ');
+  }
+
   // ========== MOSTRAR SELECTOR DE PRODUCTO ==========
   Future<void> _mostrarSelectorProducto() async {
     final resultado = await showDialog<Map<String, String>?>(
@@ -183,8 +220,25 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
         final fecha = await showDatePicker(
           context: context,
           initialDate: _fechaSeleccionada ?? DateTime.now(),
-          firstDate: DateTime(2024),
+          firstDate: DateTime(2025),
           lastDate: DateTime(2080),
+          builder: (context, child) {
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: ColorScheme.light(
+                  primary: primaryColorDark,
+                  onPrimary: Colors.white,
+                  onSurface: Colors.black,
+                ),
+                textButtonTheme: TextButtonThemeData(
+                  style: TextButton.styleFrom(
+                    foregroundColor: primaryColorDark,
+                  ),
+                ),
+              ),
+              child: child!,
+            );
+          },
         );
 
         if (fecha != null) {
@@ -198,7 +252,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: Colors.grey[400]!),
+          border: Border.all(color: primaryColorDark),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -212,7 +266,6 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
                 color: _fechaSeleccionada == null ? Colors.grey[600] : Colors.black87,
               ),
             ),
-            Icon(Icons.calendar_today, color: Colors.grey[600]),
           ],
         ),
       ),
@@ -224,9 +277,27 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
     return TextField(
       controller: _julianoController,
       decoration: InputDecoration(
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+        ),
         labelText: 'Día Juliano (001-366)',
+        labelStyle: TextStyle(
+          color: Colors.grey.shade800,
+        ),
+        floatingLabelStyle: TextStyle(
+          color: primaryColorDark,
+        ),
         hintText: 'Ej: 345, 001, 200',
-        prefixIcon: const Icon(Icons.calendar_month),
+        prefixIcon: const Icon(Icons.calendar_month, color: primaryColorDark),
         suffixIcon: _julianoFiltro != null && _julianoFiltro!.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.clear, size: 20),
@@ -239,9 +310,6 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
                 },
               )
             : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         helperText: 'Ingrese el día juliano del año (1-366)',
         helperStyle: TextStyle(fontSize: 11, color: Colors.grey[600]),
@@ -273,8 +341,25 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
     return DropdownButtonFormField<int?>(
       value: _turnoSeleccionado,
       decoration: InputDecoration(
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+        ),
         labelText: 'Turno',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        labelStyle: TextStyle(
+          color: Colors.grey.shade800,
+        ),
+        floatingLabelStyle: TextStyle(
+          color: primaryColorDark,
+        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       items: [
@@ -287,7 +372,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
             value: turno['id'] as int?,
             child: Text(turno['nombre'] ?? ''),
           );
-        }).toList(),
+        }),
       ],
       onChanged: (value) {
         setState(() {
@@ -303,8 +388,25 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
     return DropdownButtonFormField<int?>(
       value: _lineaSeleccionada,
       decoration: InputDecoration(
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark, width: 1.0)
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark.withAlpha(128), width: 1.0),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: primaryColorDark, width: 2.0),
+        ),
         labelText: 'Línea',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        labelStyle: TextStyle(
+          color: Colors.grey.shade800,
+        ),
+        floatingLabelStyle: TextStyle(
+          color: primaryColorDark,
+        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       items: [
@@ -317,7 +419,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
             value: linea['id'] as int?,
             child: Text(linea['nombre'] ?? ''),
           );
-        }).toList(),
+        }),
       ],
       onChanged: (value) {
         setState(() {
@@ -336,7 +438,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: Colors.grey[400]!),
+          border: Border.all(color: primaryColorDark),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -377,7 +479,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
     );
   }
 
-  // ========== UI: SECCIÓN DE FILTROS ==========
+  // ========== UI: SECCIÓN DE FILTROS COLAPSABLE ==========
   Widget _buildSeccionFiltros() {
     final hayFiltrosActivos = _fechaSeleccionada != null ||
         _julianoFiltro != null ||
@@ -388,51 +490,110 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
     return Card(
       color: const Color.fromARGB(255, 224, 245, 214),
       margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Filtros',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+      child: Column(
+        children: [
+          // ========== HEADER SIEMPRE VISIBLE ==========
+          InkWell(
+            onTap: () {
+              setState(() {
+                _filtrosExpandidos = !_filtrosExpandidos;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(
+                    _filtrosExpandidos 
+                        ? Icons.expand_less 
+                        : Icons.expand_more,
                     color: primaryColorDark,
+                    size: 28,
                   ),
-                ),
-                if (hayFiltrosActivos)
-                  TextButton.icon(
-                    onPressed: _limpiarFiltros,
-                    icon: const Icon(Icons.clear_all, size: 18, color: primaryColorDark),
-                    label: const Text('Limpiar', style: TextStyle(color: primaryColorDark)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Filtros',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColorDark,
+                          ),
+                        ),
+                        if (!_filtrosExpandidos && hayFiltrosActivos)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _construirResumenFiltros(),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-              ],
+                  if (hayFiltrosActivos)
+                    TextButton.icon(
+                      onPressed: _limpiarFiltros,
+                      icon: const Icon(
+                        Icons.clear_all, 
+                        size: 18, 
+                        color: primaryColorDark,
+                      ),
+                      label: const Text(
+                        'Limpiar',
+                        style: TextStyle(color: primaryColorDark),
+                      ),
+                    ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _buildSelectorFecha(),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildSelectorJuliano(),
-                ),
-              ],
+          ),
+          
+          // ========== CONTENIDO COLAPSABLE ==========
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                children: [
+                  const Divider(height: 1),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _buildSelectorFecha(),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildSelectorJuliano(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDropdownTurno(),
+                  const SizedBox(height: 12),
+                  _buildDropdownLinea(),
+                  const SizedBox(height: 12),
+                  _buildSelectorProducto(),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            _buildDropdownTurno(),
-            const SizedBox(height: 12),
-            _buildDropdownLinea(),
-            const SizedBox(height: 12),
-            _buildSelectorProducto(),
-          ],
-        ),
+            crossFadeState: _filtrosExpandidos
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+          ),
+        ],
       ),
     );
   }
@@ -513,7 +674,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
             final resultado = await Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => DetalleTrazabilidadSupervisorScreen(
+                builder: (context) => DetalleTrazabilidadScreen(
                   trazabilidadId: trazabilidad['id'],
                 ),
               ),
@@ -758,7 +919,7 @@ class _FirmaControlCalidadScreenState extends State<FirmaControlCalidadScreen> {
         ),
       );
     } catch (e) {
-      print('Error al construir tarjeta de trazabilidad: $e');
+      debugPrint('Error al construir tarjeta de trazabilidad: $e');
       return const SizedBox.shrink();
     }
   }
@@ -1030,7 +1191,7 @@ class _DialogoSelectorProductoState extends State<_DialogoSelectorProducto> {
                               width: 48,
                               height: 48,
                               decoration: BoxDecoration(
-                                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                color: Theme.of(context).primaryColor.withAlpha(26),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: Theme.of(context).primaryColor,

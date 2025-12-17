@@ -42,10 +42,6 @@ from .permissions import IsSupervisor, IsSupervisorOrReadOnly, AllowAnyAccess
 # VIEWSET: Usuario Actual
 # ============================================================================
 class UsuarioViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet para obtener información del usuario autenticado.
-    Solo lectura.
-    """
     serializer_class = UsuarioSerializer
     permission_classes = [IsAuthenticated]
     
@@ -67,10 +63,6 @@ class UsuarioViewSet(viewsets.ReadOnlyModelViewSet):
 # VIEWSET: Líneas
 # ============================================================================
 class LineaViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet para Líneas de Producción.
-    Solo lectura (las líneas se gestionan desde el admin).
-    """
     serializer_class = LineaSerializer
     permission_classes = [AllowAnyAccess]
     queryset = Linea.objects.filter(activa=True).order_by('nombre')
@@ -82,10 +74,6 @@ class LineaViewSet(viewsets.ReadOnlyModelViewSet):
 # VIEWSET: Turnos
 # ============================================================================
 class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet para Turnos.
-    Solo lectura (los turnos se gestionan desde el admin).
-    """
     serializer_class = TurnoSerializer
     permission_classes = [AllowAnyAccess]
     queryset = Turno.objects.filter(activo=True).order_by('hora_inicio')
@@ -95,10 +83,6 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
 # VIEWSET: Colaboradores
 # ============================================================================
 class ColaboradorViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para Colaboradores.
-    Permite listar, crear, actualizar y eliminar colaboradores.
-    """
     serializer_class = ColaboradorSerializer
     permission_classes = [AllowAnyAccess]
     queryset = Colaborador.objects.filter(activo=True).order_by('codigo')
@@ -108,18 +92,6 @@ class ColaboradorViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsSupervisor])
     def cargar_excel(self, request):
-        """
-        Endpoint: POST /api/colaboradores/cargar_excel/
-        Carga colaboradores desde un archivo Excel.
-        
-        Expected format:
-        {
-            "colaboradores": [
-                {"codigo": "001", "nombre": "Juan", "apellido": "Pérez"},
-                {"codigo": "002", "nombre": "María", "apellido": "González"}
-            ]
-        }
-        """
         serializer = ColaboradorCreateSerializer(data=request.data)
         
         if serializer.is_valid():
@@ -137,12 +109,6 @@ class ColaboradorViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsSupervisor])
     def cargar_excel_archivo(self, request):
-        """
-        Endpoint: POST /api/colaboradores/cargar_excel_archivo/
-        Carga colaboradores desde un archivo Excel subido directamente.
-        
-        Expected: Multipart form data con el campo 'archivo'
-        """
         if 'archivo' not in request.FILES:
             return Response(
                 {'error': 'No se ha enviado ningún archivo'},
@@ -209,10 +175,6 @@ class ColaboradorViewSet(viewsets.ModelViewSet):
 # VIEWSET: Productos
 # ============================================================================
 class ProductoViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet para Productos.
-    Solo lectura (los productos se gestionan desde el admin).
-    """
     permission_classes = [AllowAnyAccess]
     queryset = Producto.objects.filter(activo=True).order_by('codigo')
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -230,10 +192,6 @@ class ProductoViewSet(viewsets.ReadOnlyModelViewSet):
 # VIEWSET: Tareas
 # ============================================================================
 class TareaViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para Tareas.
-    CRUD completo para supervisores.
-    """
     permission_classes = [AllowAnyAccess]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['producto__codigo', 'producto__nombre', 'observaciones']
@@ -276,10 +234,6 @@ class TareaViewSet(viewsets.ModelViewSet):
         return TareaDetailSerializer
     
     def perform_create(self, serializer):
-        """
-        Al crear una tarea, asigna automáticamente el supervisor actual
-        si no se especificó uno.
-        """
         if 'supervisor_asignador' not in serializer.validated_data:
             serializer.save(supervisor_asignador=self.request.user)
         else:
@@ -287,20 +241,12 @@ class TareaViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def hoy(self, request):
-        """
-        Endpoint: GET /api/tareas/hoy/
-        Retorna las tareas del día actual.
-        """
         tareas = self.get_queryset().filter(fecha=date.today())
         serializer = TareaListSerializer(tareas, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def por_linea_turno(self, request):
-        """
-        Endpoint: GET /api/tareas/por_linea_turno/?linea=1&turno=1&fecha=2025-10-05
-        Retorna las tareas de una línea y turno específicos.
-        """
         linea_id = request.query_params.get('linea')
         turno_id = request.query_params.get('turno')
         fecha_param = request.query_params.get('fecha', date.today())
@@ -322,10 +268,6 @@ class TareaViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def iniciar(self, request, pk=None):
-        """
-        Endpoint: POST /api/tareas/{id}/iniciar/
-        Inicia una tarea (cambia estado a 'en_curso').
-        """
         tarea = self.get_object()
         
         try:
@@ -344,10 +286,6 @@ class TareaViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def finalizar(self, request, pk=None):
-        """
-        Endpoint: POST /api/tareas/{id}/finalizar/
-        Finaliza una tarea (cambia estado a 'finalizada').
-        """
         tarea = self.get_object()
         
         try:
@@ -366,10 +304,6 @@ class TareaViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def verificar_bloqueo(self, request, pk=None):
-        """
-        Endpoint: GET /api/tareas/{id}/verificar_bloqueo/
-        Verifica si una tarea puede ser iniciada o está bloqueada.
-        """
         tarea = self.get_object()
         
         # Verificar si hay otra tarea en curso en la misma línea
@@ -402,10 +336,6 @@ class TareaViewSet(viewsets.ModelViewSet):
         })
     
     def destroy(self, request, *args, **kwargs):
-        """
-        DELETE /api/tareas/{id}/
-        Solo supervisores pueden eliminar tareas.
-        """
         tarea = self.get_object()
         
         # Solo permitir eliminar tareas pendientes
@@ -421,10 +351,6 @@ class TareaViewSet(viewsets.ModelViewSet):
 # VIEWSET: Máquinas
 # ============================================================================
 class MaquinaViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet para Máquinas.
-    Solo lectura (las máquinas se gestionan desde el admin).
-    """
     serializer_class = MaquinaSerializer
     permission_classes = [AllowAnyAccess]
     queryset = Maquina.objects.filter(activa=True).order_by('nombre')
@@ -437,10 +363,6 @@ class MaquinaViewSet(viewsets.ReadOnlyModelViewSet):
 # VIEWSET: Tipos de Eventos
 # ============================================================================
 class TipoEventoViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet para Tipos de Eventos.
-    Solo lectura (los tipos de eventos se gestionan desde el admin).
-    """
     serializer_class = TipoEventoSerializer
     permission_classes = [AllowAnyAccess]
     queryset = TipoEvento.objects.filter(activo=True).order_by('orden')
@@ -452,19 +374,12 @@ class TipoEventoViewSet(viewsets.ReadOnlyModelViewSet):
 # VIEWSET: Hoja de Procesos
 # ============================================================================
 class HojaProcesosViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para Hojas de Procesos.
-    Permite crear, listar y ver detalles de hojas de procesos.
-    """
     permission_classes = [AllowAnyAccess]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['tarea__producto__nombre', 'tarea__linea__nombre']
     ordering_fields = ['fecha_inicio', 'finalizada']
     
     def get_queryset(self):
-        """
-        Filtra hojas de procesos según parámetros de query.
-        """
         queryset = HojaProcesos.objects.select_related(
             'tarea__linea',
             'tarea__turno',
@@ -489,17 +404,12 @@ class HojaProcesosViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-fecha_inicio')
     
     def get_serializer_class(self):
-        """Retorna el serializer apropiado según la acción"""
         if self.action == 'list':
             return HojaProcesosListSerializer
         return HojaProcesosDetailSerializer
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def finalizar(self, request, pk=None):
-        """
-        Endpoint: POST /api/hojas-procesos/{id}/finalizar/
-        Finaliza una hoja de procesos.
-        """
         hoja = self.get_object()
         
         try:
@@ -518,10 +428,6 @@ class HojaProcesosViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def por_tarea(self, request):
-        """
-        Endpoint: GET /api/hojas-procesos/por_tarea/?tarea_id=1
-        Obtiene la hoja de procesos de una tarea específica.
-        """
         tarea_id = request.query_params.get('tarea_id')
         
         if not tarea_id:
@@ -550,18 +456,11 @@ class HojaProcesosViewSet(viewsets.ModelViewSet):
 # VIEWSET: Eventos de Proceso
 # ============================================================================
 class EventoProcesoViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para Eventos de Proceso.
-    Permite CRUD completo de eventos dentro de una hoja de procesos.
-    """
     permission_classes = [AllowAnyAccess]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['hora_inicio']
     
     def get_queryset(self):
-        """
-        Filtra eventos según parámetros de query.
-        """
         queryset = EventoProceso.objects.select_related(
             'hoja_procesos__tarea',
             'tipo_evento'
@@ -582,10 +481,6 @@ class EventoProcesoViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def finalizar_evento(self, request, pk=None):
-        """
-        Endpoint: POST /api/eventos-proceso/{id}/finalizar_evento/
-        Marca la hora de fin de un evento.
-        """
         from django.utils import timezone
         
         evento = self.get_object()
@@ -611,10 +506,6 @@ class EventoProcesoViewSet(viewsets.ModelViewSet):
 # VIEWSET: Trazabilidad
 # ============================================================================
 class TrazabilidadViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para Trazabilidades.
-    Permite CRUD completo y gestión de firmas/estados.
-    """
     permission_classes = [AllowAnyAccess]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
@@ -681,7 +572,6 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-fecha_creacion')
     
     def get_serializer_class(self):
-        """Retorna el serializer apropiado según la acción"""
         if self.action == 'list':
             return TrazabilidadListSerializer
         elif self.action in ['create', 'update', 'partial_update']:
@@ -690,10 +580,6 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def por_fecha_turno(self, request):
-        """
-        Endpoint: GET /api/trazabilidades/por_fecha_turno/?fecha=2025-10-05&turno=1
-        Retorna las trazabilidades de una fecha y turno específicos.
-        """
         fecha = request.query_params.get('fecha')
         turno_id = request.query_params.get('turno')
         
@@ -713,11 +599,6 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAnyAccess])
     def cambiar_estado(self, request, pk=None):
-        """
-        Endpoint: POST /api/trazabilidades/{id}/cambiar_estado/
-        Cambia el estado de una trazabilidad.
-        Body: {"estado": "liberado", "motivo_retencion": "opcional si es retenido"}
-        """
         trazabilidad = self.get_object()
         nuevo_estado = request.data.get('estado')
         motivo_retencion = request.data.get('motivo_retencion')
@@ -762,15 +643,6 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
             )
         
     def create(self, request, *args, **kwargs):
-        """Override create para agregar logging detallado"""
-        
-        print('\n' + '='*70)
-        print('RECIBIENDO REQUEST PARA CREAR TRAZABILIDAD')
-        print('='*70)
-        print(f'Content-Type: {request.content_type}')
-        print(f'Method: {request.method}')
-        
-        print('\n📦 DATA recibido:')
         for key, value in request.data.items():
             if key == 'foto_etiquetas':
                 print(f'  {key}: <IMAGE FILE>')
@@ -779,19 +651,16 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
             else:
                 print(f'  {key}: {value}')
         
-        print('\n📁 FILES recibidos:')
         for key, file in request.FILES.items():
             print(f'  {key}: {file.name} ({file.size} bytes, {file.content_type})')
         
         # Intentar serializar
         serializer = self.get_serializer(data=request.data)
-        
-        print('\n🔍 Validando datos...')
+
         try:
             serializer.is_valid(raise_exception=True)
-            print('✅ Datos válidos')
         except Exception as e:
-            print(f'\n❌ ERROR DE VALIDACIÓN:')
+            print(f'\n ERROR DE VALIDACIÓN:')
             print(f'Tipo: {type(e).__name__}')
             print(f'Mensaje: {str(e)}')
             
@@ -805,14 +674,11 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
             raise
         
         # Si llegamos aquí, crear el objeto
-        print('\n💾 Guardando...')
+        print('\n Guardando...')
         self.perform_create(serializer)
         
         headers = self.get_success_headers(serializer.data)
-        
-        print('\n✅ TRAZABILIDAD CREADA EXITOSAMENTE')
-        print('='*70 + '\n')
-        
+
         return Response(
             serializer.data, 
             status=status.HTTP_201_CREATED, 
@@ -821,15 +687,6 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'], url_path='actualizar-completa')
     def actualizar_completa(self, request, pk=None):
-        """
-        Actualizar todos los campos de una trazabilidad:
-        - cantidad_producida
-        - observaciones
-        - materias_primas (lotes y cantidades)
-        - reprocesos
-        - mermas
-        - colaboradores
-        """
         trazabilidad = self.get_object()
         
         # Verificar que no esté firmada por supervisor
@@ -931,30 +788,18 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
         
     @action(detail=False, methods=['get'])
     def inspeccionar_modelo(self, request):
-        """
-        Endpoint temporal para inspeccionar el modelo Trazabilidad
-        """
         from .models import Trazabilidad
-        
-        print('\n' + '='*80)
-        print('🔍 INSPECCIÓN DEL MODELO TRAZABILIDAD')
-        print('='*80)
-        
         # Obtener una trazabilidad de ejemplo
         trazabilidad = Trazabilidad.objects.first()
         
         if not trazabilidad:
             return Response({'error': 'No hay trazabilidades en la BD'})
+
         
-        print(f'\n📦 Trazabilidad ID: {trazabilidad.id}')
-        
-        # Listar TODOS los campos del modelo
-        print('\n📋 CAMPOS DEL MODELO:')
         for field in trazabilidad._meta.fields:
             print(f'   - {field.name} ({field.__class__.__name__})')
         
         # Listar relaciones many-to-many
-        print('\n🔗 RELACIONES MANY-TO-MANY:')
         for field in trazabilidad._meta.many_to_many:
             print(f'   - {field.name} ({field.__class__.__name__})')
             print(f'     → Modelo relacionado: {field.related_model.__name__}')
@@ -962,18 +807,15 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                 print(f'     → Modelo intermedio: {field.remote_field.through.__name__}')
         
         # Listar relaciones inversas (related objects)
-        print('\n🔄 RELACIONES INVERSAS (RELATED OBJECTS):')
         for related in trazabilidad._meta.related_objects:
             print(f'   - {related.name} ({related.__class__.__name__})')
             print(f'     → Desde modelo: {related.related_model.__name__}')
             print(f'     → Campo: {related.field.name}')
         
         # Intentar acceder a colaboradores de diferentes formas
-        print('\n👥 INTENTANDO ACCEDER A COLABORADORES:')
         
         # Método 1: colaboradores_reales
         if hasattr(trazabilidad, 'colaboradores_reales'):
-            print(f'\n   ✅ Tiene atributo "colaboradores_reales"')
             print(f'      Tipo: {type(trazabilidad.colaboradores_reales)}')
             print(f'      Clase: {trazabilidad.colaboradores_reales.__class__.__name__}')
             print(f'      Atributos: {dir(trazabilidad.colaboradores_reales)[:10]}...')
@@ -981,56 +823,39 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
             # Intentar obtener datos
             try:
                 cols = trazabilidad.colaboradores_reales.all()
-                print(f'      .all() retorna: {cols.count()} colaboradores')
+                print(f' .all() retorna: {cols.count()} colaboradores')
             except Exception as e:
-                print(f'      ❌ .all() falló: {e}')
+                print(f' .all() falló: {e}')
         
         # Método 2: trazabilidadcolaborador_set (relación inversa típica)
         if hasattr(trazabilidad, 'trazabilidadcolaborador_set'):
-            print(f'\n   ✅ Tiene atributo "trazabilidadcolaborador_set"')
             try:
                 relaciones = trazabilidad.trazabilidadcolaborador_set.all()
                 print(f'      Count: {relaciones.count()}')
                 for rel in relaciones:
-                    print(f'      - {rel}')
+                    print(f'   - {rel}')
             except Exception as e:
-                print(f'      ❌ Error: {e}')
+                print(f'   Error: {e}')
         
         # Método 3: colaborador_set
         if hasattr(trazabilidad, 'colaborador_set'):
-            print(f'\n   ✅ Tiene atributo "colaborador_set"')
+            print(f'\n  Tiene atributo "colaborador_set"')
             try:
                 cols = trazabilidad.colaborador_set.all()
-                print(f'      Count: {cols.count()}')
+                print(f'  Count: {cols.count()}')
             except Exception as e:
-                print(f'      ❌ Error: {e}')
+                print(f'  Error: {e}')
         
         # Buscar todos los atributos que contengan "colabor"
-        print('\n🔎 ATRIBUTOS QUE CONTIENEN "colabor":')
         for attr in dir(trazabilidad):
             if 'colabor' in attr.lower():
                 print(f'   - {attr}')
-        
-        print('='*80 + '\n')
-        
         return Response({'status': 'Ver terminal de Django para detalles'})
 
     def update(self, request, *args, **kwargs):
-        """
-        Actualizar trazabilidad usando el serializer (que maneja reprocesos/mermas)
-        """
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        
-        print('\n' + '='*80)
-        print('🔧 UPDATE DE TRAZABILIDAD - USANDO SERIALIZER')
-        print('='*80)
-        print(f'Trazabilidad ID: {instance.id}')
-        print(f'Content-Type: {request.content_type}')
-        print(f'Partial: {partial}')
-        
-        # 🔍 LOG DE DATOS RECIBIDOS
-        print('\n📦 DATOS RECIBIDOS:')
+    
         for key, value in request.data.items():
             if isinstance(value, list):
                 print(f'  {key}: [{len(value)} elementos]')
@@ -1055,9 +880,7 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
         try:
             serializer.is_valid(raise_exception=True)
         except Exception as e:
-            print('\n' + '❌'*40)
             print('ERROR DE VALIDACIÓN EN SERIALIZER')
-            print('❌'*40)
             print(f'Tipo de error: {type(e).__name__}')
             print(f'Mensaje: {str(e)}')
             
@@ -1065,8 +888,6 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
                 print('\n🔍 ERRORES DEL SERIALIZER:')
                 import json
                 print(json.dumps(serializer.errors, indent=2, default=str))
-            
-            print('❌'*40 + '\n')
             raise  # Re-lanzar para que DRF maneje la respuesta
         
         self.perform_update(serializer)
@@ -1074,18 +895,11 @@ class TrazabilidadViewSet(viewsets.ModelViewSet):
         if getattr(instance, '_prefetched_objects_cache', None):
             instance._prefetched_objects_cache = {}
         
-        print('✅ Trazabilidad actualizada exitosamente vía serializer')
-        print('='*80 + '\n')
-        
         return Response(serializer.data)
 # ============================================================================
 # VIEWSET: Firmas de Trazabilidad
 # ============================================================================
 class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para Firmas de Trazabilidad.
-    Permite crear y listar firmas (no modificar ni eliminar).
-    """
     serializer_class = FirmaTrazabilidadSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post']
@@ -1112,10 +926,6 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-fecha_firma')
     
     def perform_create(self, serializer):
-        """
-        Al crear una firma, valida que el usuario tenga el rol correcto
-        y asigna automáticamente el usuario actual.
-        """
         trazabilidad = serializer.validated_data['trazabilidad']
         tipo_firma = serializer.validated_data['tipo_firma']
         
@@ -1137,11 +947,6 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def firmar(self, request):
-        """
-        Endpoint: POST /api/firmas-trazabilidad/firmar/
-        Crea una firma para una trazabilidad.
-        Body: {"trazabilidad_id": 1}
-        """
         trazabilidad_id = request.data.get('trazabilidad_id')
         
         if not trazabilidad_id:
@@ -1166,7 +971,7 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
             )
         
         # LOGGING PARA DEBUGGING
-        print(f'👤 Usuario firmando: {request.user}')
+        print(f' Usuario firmando: {request.user}')
         print(f'   - Username: {request.user.username}')
         print(f'   - First name: {request.user.first_name}')
         print(f'   - Last name: {request.user.last_name}')
@@ -1229,11 +1034,10 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
         # Crear la firma
         firma = FirmaTrazabilidad.objects.create(
             trazabilidad=trazabilidad,
-            usuario=request.user,  # ✅ ASEGURAR QUE SE GUARDA EL USUARIO
+            usuario=request.user,
             tipo_firma=tipo_firma
         )
         
-        # ✅ LOGGING POST-CREACIÓN
         print(f'✅ Firma creada:')
         print(f'   - ID: {firma.id}')
         print(f'   - Usuario: {firma.usuario}')
@@ -1241,33 +1045,18 @@ class FirmaTrazabilidadViewSet(viewsets.ModelViewSet):
         
         # Serializar y retornar
         serializer = FirmaTrazabilidadSerializer(firma)
-        
-        # ✅ LOGGING DEL SERIALIZER
+
         print(f'📦 Datos serializados: {serializer.data}')
         
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class MateriaPrimaViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para gestión de Materias Primas
-    
-    list: Listar todas las materias primas activas
-    retrieve: Obtener detalle de una materia prima por código
-    create: Crear nueva materia prima (solo supervisores)
-    update: Actualizar materia prima (solo supervisores)
-    destroy: Eliminar materia prima (solo supervisores)
-    """
-    
     queryset = MateriaPrima.objects.filter(activo=True).order_by('nombre')
     serializer_class = MateriaPrimaSerializer
     lookup_field = 'codigo' 
     
     def get_permissions(self):
-        """
-        - GET (list, retrieve): Acceso sin autenticación (operadores)
-        - POST, PUT, PATCH, DELETE: Solo autenticados (supervisores)
-        """
         if self.action in ['list', 'retrieve']:
             permission_classes = [AllowAnyAccess]
         else:
@@ -1275,9 +1064,6 @@ class MateriaPrimaViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def get_queryset(self):
-        """
-        Filtrar materias primas con búsqueda opcional
-        """
         queryset = self.queryset
         
         # Búsqueda por nombre o código
@@ -1291,39 +1077,17 @@ class MateriaPrimaViewSet(viewsets.ModelViewSet):
         return queryset
     
     def list(self, request, *args, **kwargs):
-        """
-        GET /api/materias-primas/
-        
-        Retorna lista de todas las materias primas activas
-        
-        Query params opcionales:
-        - search: buscar por nombre o código
-        
-        Ejemplo: /api/materias-primas/?search=manjar
-        """
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     
     def retrieve(self, request, *args, **kwargs):
-        """
-        GET /api/materias-primas/{codigo}/
-        
-        Retorna detalle de una materia prima específica
-        
-        Ejemplo: /api/materias-primas/LAC0001/
-        """
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
 
 class MateriaPrimaSerializer(serializers.ModelSerializer):
-    """
-    Serializer para Materia Prima
-    Retorna los campos necesarios para el frontend
-    """
-    
     class Meta:
         model = MateriaPrima
         fields = [

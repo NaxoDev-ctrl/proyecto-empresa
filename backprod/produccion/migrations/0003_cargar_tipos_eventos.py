@@ -110,7 +110,7 @@ def revertir_tipos_eventos(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('produccion', '0001_initial'),  # Ajusta esto al nombre de la última migración
+        ('produccion', '0002_alter_tarea_unique_together_and_more'),  # Ajusta esto al nombre de tu última migración
     ]
 
     operations = [

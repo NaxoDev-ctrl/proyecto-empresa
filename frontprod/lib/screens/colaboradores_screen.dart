@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel_pkg;
 import 'package:frontprod/screens/detalle_trazabilidad_screen.dart';
+import 'package:frontprod/screens/lista_tareas_screen.dart';
 import '../services/api_service.dart';
 import '../models/colaborador.dart';
 
+const Color primaryColorDark = Color.fromARGB(255, 26, 110, 92);
 class ColaboradoresScreen extends StatefulWidget {
   const ColaboradoresScreen({super.key});
 
@@ -558,8 +560,11 @@ class _DialogConfirmacionCarga extends StatelessWidget {
         ),
         ElevatedButton.icon(
           onPressed: () => Navigator.pop(context, true),
-          icon: const Icon(Icons.check),
-          label: const Text('Confirmar Carga'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryColorLight,
+          ),
+          icon: const Icon(Icons.check, color: primaryColorDark),
+          label: const Text('Confirmar Carga', style: TextStyle(fontWeight: FontWeight.bold, color: primaryColorDark)),
         ),
       ],
     );

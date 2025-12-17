@@ -18,11 +18,6 @@ from .models import (
 # ============================================================================
 @admin.register(Usuario)
 class UsuarioAdmin(BaseUserAdmin):
-    """
-    Configuración del admin para el modelo Usuario.
-    Extiende UserAdmin de Django para agregar campos personalizados.
-    """
-    
     # Campos a mostrar en la lista
     list_display = ['username', 'first_name', 'last_name', 'rol', 'activo', 'fecha_creacion']
     list_filter = ['rol', 'activo', 'fecha_creacion']
@@ -50,11 +45,7 @@ class UsuarioAdmin(BaseUserAdmin):
 # ============================================================================
 @admin.register(Linea)
 class LineaAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Líneas de Producción.
-    """
-    
-    list_display = ['nombre', 'activa', 'fecha_creacion']
+    list_display = ['nombre', 'activa']
     list_filter = ['activa']
     search_fields = ['nombre', 'descripcion']
     ordering = ['nombre']
@@ -75,10 +66,6 @@ class LineaAdmin(admin.ModelAdmin):
 # ============================================================================
 @admin.register(Turno)
 class TurnoAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Turnos.
-    """
-    
     list_display = ['nombre', 'hora_inicio', 'hora_fin', 'activo']
     list_filter = ['activo']
     ordering = ['hora_inicio']
@@ -95,10 +82,6 @@ class TurnoAdmin(admin.ModelAdmin):
 # ============================================================================
 @admin.register(Colaborador)
 class ColaboradorAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Colaboradores.
-    """
-    
     list_display = ['codigo', 'nombre', 'apellido', 'activo', 'fecha_carga']
     list_filter = ['activo', 'fecha_carga']
     search_fields = ['codigo', 'nombre', 'apellido']
@@ -118,10 +101,6 @@ class ColaboradorAdmin(admin.ModelAdmin):
 # ============================================================================
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Productos.
-    """
-    
     list_display = ['codigo', 'nombre', 'unidad_medida', 'activo']
     list_filter = ['activo']
     search_fields = ['codigo', 'nombre', 'unidad_medida', 'descripcion']
@@ -143,10 +122,6 @@ class ProductoAdmin(admin.ModelAdmin):
 # ============================================================================
 @admin.register(MateriaPrima)
 class MateriaPrimaAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Materias Primas.
-    """
-    
     list_display = ['codigo', 'nombre', 'unidad_medida', 'requiere_lote', 'activo']
     list_filter = ['requiere_lote', 'activo', 'unidad_medida']
     search_fields = ['codigo', 'nombre']
@@ -163,10 +138,6 @@ class MateriaPrimaAdmin(admin.ModelAdmin):
 # ADMIN: Receta (Inline para Producto)
 # ============================================================================
 class RecetaInline(admin.TabularInline):
-    """
-    Permite editar las materias primas de un producto
-    directamente desde la pantalla de edición del producto.
-    """
     model = Receta
     extra = 1
     fields = ['materia_prima', 'orden', 'activo']
@@ -182,10 +153,6 @@ ProductoAdmin.inlines = [RecetaInline]
 # ============================================================================
 @admin.register(Receta)
 class RecetaAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Recetas.
-    """
-    
     list_display = ['producto', 'materia_prima', 'orden', 'activo']
     list_filter = ['activo', 'producto']
     search_fields = ['producto__nombre', 'materia_prima__nombre']
@@ -202,10 +169,6 @@ class RecetaAdmin(admin.ModelAdmin):
 # ADMIN: Tarea Colaborador (Inline para Tarea)
 # ============================================================================
 class TareaColaboradorInline(admin.TabularInline):
-    """
-    Permite asignar colaboradores a una tarea
-    directamente desde la pantalla de edición de la tarea.
-    """
     model = TareaColaborador
     extra = 1
     fields = ['colaborador']
@@ -217,10 +180,6 @@ class TareaColaboradorInline(admin.TabularInline):
 # ============================================================================
 @admin.register(Tarea)
 class TareaAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Tareas.
-    """
-    
     list_display = [
         'fecha', 
         'linea', 
@@ -260,9 +219,9 @@ class TareaAdmin(admin.ModelAdmin):
     def estado_badge(self, obj):
         """Muestra el estado con color"""
         colors = {
-            'pendiente': '#ffc107',  # amarillo
-            'en_curso': '#17a2b8',   # azul
-            'finalizada': '#28a745'  # verde
+            'pendiente': '#ffc107',
+            'en_curso': '#17a2b8',
+            'finalizada': '#28a745'
         }
         color = colors.get(obj.estado, '#6c757d')
         return format_html(
@@ -291,10 +250,6 @@ class TareaAdmin(admin.ModelAdmin):
 # ============================================================================
 @admin.register(TareaColaborador)
 class TareaColaboradorAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Asignaciones de Colaboradores.
-    """
-    
     list_display = ['tarea', 'colaborador', 'fecha_asignacion']
     list_filter = ['fecha_asignacion']
     search_fields = [
@@ -320,10 +275,6 @@ admin.site.index_title = "Panel de Administración"
 # ============================================================================
 @admin.register(Maquina)
 class MaquinaAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Máquinas.
-    """
-    
     list_display = ['codigo', 'nombre', 'activa']
     list_filter = ['activa']
     search_fields = ['codigo', 'nombre']
@@ -341,10 +292,6 @@ class MaquinaAdmin(admin.ModelAdmin):
 # ============================================================================
 @admin.register(TipoEvento)
 class TipoEventoAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Tipos de Eventos.
-    """
-    
     list_display = ['orden', 'nombre', 'codigo', 'activo']
     list_filter = ['activo']
     search_fields = ['nombre', 'codigo']
@@ -365,9 +312,6 @@ class TipoEventoAdmin(admin.ModelAdmin):
 # ADMIN: EventoMaquina (Inline para EventoProceso)
 # ============================================================================
 class EventoMaquinaInline(admin.TabularInline):
-    """
-    Permite asignar máquinas a un evento de proceso.
-    """
     model = EventoMaquina
     extra = 1
     fields = ['maquina']
@@ -377,9 +321,6 @@ class EventoMaquinaInline(admin.TabularInline):
 # ADMIN: EventoProceso (Inline para HojaProcesos)
 # ============================================================================
 class EventoProcesoInline(admin.TabularInline):
-    """
-    Permite ver y editar eventos desde la hoja de procesos.
-    """
     model = EventoProceso
     extra = 0
     fields = ['tipo_evento', 'hora_inicio', 'hora_fin', 'observaciones']
@@ -391,10 +332,6 @@ class EventoProcesoInline(admin.TabularInline):
 # ============================================================================
 @admin.register(HojaProcesos)
 class HojaProcesosAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Hojas de Procesos.
-    """
-    
     list_display = ['tarea', 'fecha_inicio', 'fecha_finalizacion', 'finalizada']
     list_filter = ['finalizada', 'fecha_inicio']
     search_fields = ['tarea__producto__nombre', 'tarea__linea__nombre']
@@ -426,10 +363,6 @@ class HojaProcesosAdmin(admin.ModelAdmin):
 # ============================================================================
 @admin.register(EventoProceso)
 class EventoProcesoAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Eventos de Procesos.
-    """
-    
     list_display = ['hoja_procesos', 'tipo_evento', 'hora_inicio', 'hora_fin', 'duracion_minutos']
     list_filter = ['tipo_evento', 'hora_inicio']
     search_fields = ['hoja_procesos__tarea__producto__nombre']
@@ -490,12 +423,9 @@ class FirmaTrazabilidadInline(admin.TabularInline):
 # Inline para mostrar colaboradores dentro de Trazabilidad
 # ============================================================================
 class TrazabilidadColaboradorInline(admin.TabularInline):
-    """
-    Muestra los colaboradores dentro del formulario de Trazabilidad
-    """
     model = TrazabilidadColaborador
-    extra = 1  # Líneas vacías para agregar nuevos
-    autocomplete_fields = ['colaborador']  # Búsqueda inteligente
+    extra = 1
+    autocomplete_fields = ['colaborador']
     fields = ['colaborador', 'fecha_asignacion']
     readonly_fields = ['fecha_asignacion']
 
@@ -513,10 +443,6 @@ class TrazabilidadColaboradorInline(admin.TabularInline):
 # ============================================================================
 @admin.register(FirmaTrazabilidad)
 class FirmaTrazabilidadAdmin(admin.ModelAdmin):
-    """
-    Configuración del admin para Firmas de Trazabilidad.
-    """
-    
     list_display = ['trazabilidad', 'tipo_firma', 'usuario', 'fecha_firma']
     list_filter = ['tipo_firma', 'fecha_firma']
     search_fields = [
@@ -625,7 +551,7 @@ class TrazabilidadMateriaPrimaInline(admin.TabularInline):
             if count > 0:
                 total = sum(r.cantidad for r in obj.reprocesos.all())
                 return format_html(
-                    '<span style="color: orange; font-weight: bold;">♻️ {} ({} total)</span>',
+                    '<span style="color: orange; font-weight: bold;"> {} ({} total)</span>',
                     count,
                     total
                 )
@@ -639,7 +565,7 @@ class TrazabilidadMateriaPrimaInline(admin.TabularInline):
             if count > 0:
                 total = sum(m.cantidad for m in obj.mermas.all())
                 return format_html(
-                    '<span style="color: red; font-weight: bold;">🗑️ {} ({} total)</span>',
+                    '<span style="color: red; font-weight: bold;"> {} ({} total)</span>',
                     count,
                     total
                 )
@@ -671,7 +597,7 @@ class TrazabilidadMateriaPrimaAdmin(admin.ModelAdmin):
         if count > 0:
             total = sum(r.cantidad for r in obj.reprocesos.all())
             return format_html(
-                '<span style="color: orange; font-weight: bold;">♻️ {} reprocesos ({} {})</span>',
+                '<span style="color: orange; font-weight: bold;"> {} reprocesos ({} {})</span>',
                 count,
                 total,
                 obj.unidad_medida
@@ -684,7 +610,7 @@ class TrazabilidadMateriaPrimaAdmin(admin.ModelAdmin):
         if count > 0:
             total = sum(m.cantidad for m in obj.mermas.all())
             return format_html(
-                '<span style="color: red; font-weight: bold;">🗑️ {} mermas ({} {})</span>',
+                '<span style="color: red; font-weight: bold;"> {} mermas ({} {})</span>',
                 count,
                 total,
                 obj.unidad_medida

@@ -20,12 +20,13 @@ class _SeleccionLineaScreenState extends State<SeleccionLineaScreen> {
   final Color _cardColor = const Color(0xFFFFEFE9); // Fondo de la tarjeta
   final Color _cardTextColor = const Color(0xFF5A102A);
   final Map<String, String> _lineaImageAssets = {
-    'L1': 'assets/images/logo_entrelagos2.png',
-    'L2': 'assets/images/logo_entrelagosE.png',
+    'L1': 'assets/images/foto_linea1.jpeg',
+    'L2': 'assets/images/foto_linea2.jpeg',
     'L3': 'assets/images/foto_linea3.jpg',
-    'L4': 'assets/images/foto_linea4.jpg',
+    'L4': 'assets/images/foto_linea4.jpeg',
+    'HOR': 'assets/images/foto_hor.jpeg',
+    'OS': 'assets/images/foto_os.jpeg',
     // Agrega más mapeos según necesites:
-    // 'L3': 'assets/images/imagenL3.png',
   };
 
   @override

@@ -11,14 +11,9 @@ from .validators import validate_image_file
 
 
 # ============================================================================
-# MODELO: Usuario (Extendido de AbstractUser)
+# MODELO: Usuario
 # ============================================================================
 class Usuario(AbstractUser):
-    """
-    Modelo de usuario del sistema.
-    Solo puede ser creado por el administrador.
-    """
-    
     ROLES = [
         ('supervisor', 'Supervisor'),
         ('control_calidad', 'Control de Calidad'),
@@ -59,10 +54,6 @@ class Usuario(AbstractUser):
 # MODELO: Línea de Producción
 # ============================================================================
 class Linea(models.Model):
-    """
-    Representa una línea de producción en la planta.
-    """
-    
     nombre = models.CharField(
         max_length=50,
         unique=True,
@@ -80,9 +71,6 @@ class Linea(models.Model):
         help_text="Descripción opcional de la línea"
     )
     
-    fecha_creacion = models.DateTimeField(
-        auto_now_add=True
-    )
     
     class Meta:
         db_table = 'lineas'
@@ -98,10 +86,6 @@ class Linea(models.Model):
 # MODELO: Turno
 # ============================================================================
 class Turno(models.Model):
-    """
-    Representa los turnos de trabajo en la planta.
-    """
-    
     TURNOS_CHOICES = [
         ('AM', 'AM (06:15-13:35)'),
         ('Jornada', 'Jornada (08:00-17:30)'),
@@ -142,11 +126,6 @@ class Turno(models.Model):
 # MODELO: Colaborador
 # ============================================================================
 class Colaborador(models.Model):
-    """
-    Representa a los colaboradores que trabajan en las líneas.
-    Se cargan desde un archivo Excel por el supervisor.
-    """
-    
     codigo = models.IntegerField(
         unique=True,
         help_text="Código identificador del colaborador"
@@ -200,10 +179,6 @@ class Colaborador(models.Model):
 # MODELO: Producto
 # ============================================================================
 class Producto(models.Model):
-    """
-    Representa los productos que se fabrican.
-    """
-    
     UNIDADES_MEDIDA = [
         ('KG', 'KG'),
         ('UN', 'UN'),
@@ -252,10 +227,6 @@ class Producto(models.Model):
 # MODELO: Materia Prima
 # ============================================================================
 class MateriaPrima(models.Model):
-    """
-    Representa las materias primas asociadas a cada producto (receta).
-    """
-
     UNIDADES_MEDIDA = [
         ('KG', 'KG'),
         ('UN', 'UN'),
@@ -303,10 +274,6 @@ class MateriaPrima(models.Model):
 # MODELO: Receta
 # ============================================================================
 class Receta(models.Model):
-    """
-    Relaciona un producto con sus materias primas necesarias.
-    """
-    
     producto = models.ForeignKey(
         Producto,
         on_delete=models.CASCADE,
@@ -349,12 +316,6 @@ class Receta(models.Model):
 # MODELO: Tarea
 # ============================================================================
 class Tarea(models.Model):
-    """
-    Representa una tarea de producción asignada a una línea específica
-    en un turno determinado.
-    """
-    
-    # Relaciones
     linea = models.ForeignKey(
         Linea,
         on_delete=models.PROTECT,
@@ -383,7 +344,6 @@ class Tarea(models.Model):
         help_text="Supervisor que creó esta tarea"
     )
     
-    # Campos de información
     fecha = models.DateField(
         default=date.today,
         help_text="Fecha de la producción",
@@ -402,7 +362,6 @@ class Tarea(models.Model):
         help_text="Observaciones sobre la tarea"
     )
     
-    # Estados de la tarea
     ESTADOS = [
         ('pendiente', 'Pendiente'),
         ('en_curso', 'En Curso'),
@@ -417,7 +376,6 @@ class Tarea(models.Model):
         db_index=True
     )
     
-    # Auditoría
     fecha_creacion = models.DateTimeField(
         auto_now_add=True,
         help_text="Fecha y hora de creación de la tarea"
@@ -517,10 +475,6 @@ class Tarea(models.Model):
 # MODELO: Tarea Colaborador
 # ============================================================================
 class TareaColaborador(models.Model):
-    """
-    Relaciona una tarea con los colaboradores asignados.
-    """
-    
     tarea = models.ForeignKey(
         Tarea,
         on_delete=models.CASCADE,
@@ -554,11 +508,6 @@ class TareaColaborador(models.Model):
 # MODELO: Maquina
 # ============================================================================
 class Maquina(models.Model):
-    """
-    Catálogo de máquinas disponibles en la planta.
-    Las máquinas pueden moverse entre líneas.
-    """
-    
     nombre = models.CharField(
         max_length=100,
         help_text="Nombre de la máquina"
@@ -589,11 +538,6 @@ class Maquina(models.Model):
 # ============================================================================
 
 class TipoEvento(models.Model):
-    """
-    Catálogo de tipos de eventos para la hoja de procesos.
-    Los 11 tipos predefinidos de eventos.
-    """
-    
     nombre = models.CharField(
         max_length=50,
         unique=True,
@@ -636,11 +580,6 @@ class TipoEvento(models.Model):
 # MODELO: HojaProcesos
 # ============================================================================
 class HojaProcesos(models.Model):
-    """
-    Hoja de procesos que registra todos los eventos de tiempo
-    durante la producción de una tarea.
-    """
-    
     tarea = models.OneToOneField(
         Tarea,
         on_delete=models.CASCADE,
@@ -690,11 +629,6 @@ class HojaProcesos(models.Model):
 # MODELO: EventoProceso
 # ============================================================================
 class EventoProceso(models.Model):
-    """
-    Registra cada evento individual en la hoja de procesos
-    (setup inicial, templado, producción, etc.)
-    """
-    
     hoja_procesos = models.ForeignKey(
         HojaProcesos,
         on_delete=models.CASCADE,
@@ -748,11 +682,6 @@ class EventoProceso(models.Model):
 # MODELO: EventoMaquina
 # ============================================================================
 class EventoMaquina(models.Model):
-    """
-    Relación many-to-many entre EventoProceso y Maquina.
-    Registra qué máquinas se usaron en cada evento.
-    """
-    
     evento = models.ForeignKey(
         EventoProceso,
         on_delete=models.CASCADE,
@@ -781,11 +710,6 @@ class EventoMaquina(models.Model):
 # MODELO: Trazabilidad
 # ============================================================================
 class Trazabilidad(models.Model):
-    """
-    Trazabilidad de producción. Se crea después de finalizar
-    la hoja de procesos.
-    """
-    
     ESTADOS = [
         ('en_revision', 'En Revisión'),
         ('liberado', 'Liberado'),
@@ -877,7 +801,6 @@ class Trazabilidad(models.Model):
                 'motivo_retencion': 'El motivo de retención es obligatorio cuando el estado es "Retenido"'
             })
         
-    # Calcular el día juliano
     @staticmethod
     def calcular_juliano(fecha):
         """
@@ -930,7 +853,6 @@ class Trazabilidad(models.Model):
         """
         Sobrescribir save para asegurar que juliano nunca cambia después de creación
         """
-        # Si ya existe (UPDATE), preservar juliano original
         if self.pk:
             original = Trazabilidad.objects.get(pk=self.pk)
             if original.juliano and self.juliano != original.juliano:
@@ -943,11 +865,6 @@ class Trazabilidad(models.Model):
 # MODELO: TrazabilidadMateriaPrima
 # ============================================================================
 class TrazabilidadMateriaPrima(models.Model):
-    """
-    Registra los lotes y cantidades de materias primas usadas
-    en la producción.
-    """
-    
     UNIDADES_MEDIDA = [
         ('kg', 'Kilogramos'),
         ('unidades', 'Unidades'),
@@ -1015,7 +932,6 @@ class TrazabilidadMateriaPrima(models.Model):
         """Validaciones personalizadas"""
         super().clean()
         
-        # Si la materia prima requiere lote, el lote es obligatorio
         if self.materia_prima.requiere_lote and not self.lote:
             raise ValidationError({
                 'lote': f'La materia prima "{self.materia_prima.nombre}" requiere lote'
@@ -1070,9 +986,6 @@ class Reproceso(models.Model):
 # MODELO: Merma
 # ============================================================================
 class Merma(models.Model):
-    """
-    Registra las mermas ocurridas durante la producción.
-    """
     CAUSAS_CHOICES = [
         ('cayo_al_suelo', 'Cayó al Suelo'),
         ('por_hongos', 'Por Hongos'),
@@ -1117,10 +1030,6 @@ class Merma(models.Model):
 # MODELO: FotoEtiqueta
 # ============================================================================
 class FotoEtiqueta(models.Model):
-    """
-    Almacena la foto de las etiquetas usadas en la producción.
-    """
-    
     trazabilidad = models.OneToOneField(
         Trazabilidad,
         on_delete=models.CASCADE,
@@ -1151,10 +1060,6 @@ class FotoEtiqueta(models.Model):
 # MODELO: FirmaTrazabilidad
 # ============================================================================
 class FirmaTrazabilidad(models.Model):
-    """
-    Registra las firmas digitales de supervisor y control de calidad.
-    """
-    
     TIPOS_FIRMA = [
         ('supervisor', 'Supervisor'),
         ('control_calidad', 'Control de Calidad'),
@@ -1214,12 +1119,6 @@ class FirmaTrazabilidad(models.Model):
 # MODELO: TrazabilidadColaborador
 # ============================================================================
 class TrazabilidadColaborador(models.Model):
-    """
-    Registra los colaboradores que REALMENTE trabajaron en la producción.
-    
-    Puede diferir de los colaboradores asignados originalmente en la Tarea,
-    ya que operativamente pueden cambiar (ausencias, reemplazos, etc.)
-    """
     trazabilidad = models.ForeignKey(
         'Trazabilidad',
         on_delete=models.CASCADE,
@@ -1229,7 +1128,7 @@ class TrazabilidadColaborador(models.Model):
     
     colaborador = models.ForeignKey(
         'Colaborador',
-        on_delete=models.PROTECT,  # No permitir eliminar colaborador si está en trazabilidad
+        on_delete=models.PROTECT,
         help_text='Colaborador que trabajó en la producción'
     )
     
@@ -1242,7 +1141,7 @@ class TrazabilidadColaborador(models.Model):
         db_table = 'trazabilidad_colaborador'
         verbose_name = 'Colaborador en Trazabilidad'
         verbose_name_plural = 'Colaboradores en Trazabilidad'
-        unique_together = ['trazabilidad', 'colaborador']  # No duplicar colaborador en misma trazabilidad
+        unique_together = ['trazabilidad', 'colaborador']
         ordering = ['fecha_asignacion']
     
     def __str__(self):
